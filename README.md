@@ -2,6 +2,8 @@
 
 Every tool reviews your code. **PIP reviews the programmer.**
 
+![PIP in action: install, run, verdict](examples/demo.gif)
+
 ![PIP report card](examples/sample-report-card.svg)
 
 No AI, no models, no uploads: PIP is one Python file of plain arithmetic that reads your
@@ -134,6 +136,22 @@ on-a-pip --json                   # machine-readable review
 - **Persona packs:** six managers built in (Corporate, Startup CTO, Supportive Lead, Passive-Aggressive Middle Manager, Pirate Captain, Noir Detective), and `--persona-file` loads your own from a small JSON pack. Two sample packs live in `personas/`.
 - A scheduled monthly profile-review Action example lives in `examples/`.
 
+## Examples
+
+The report card:
+
+![Sample report card](examples/sample-report-card.svg)
+
+The 1200x630 share card (`--share`):
+
+![Sample share card](examples/sample-share-card.svg)
+
+PIP Wrapped, the year in commits (`--year`):
+
+![Sample Wrapped card](examples/sample-wrapped.svg)
+
+The full written review is in [examples/sample-review.md](examples/sample-review.md), and a rendered HTML card in [examples/report-card-decksmith.html](examples/report-card-decksmith.html). The demo GIF above is rendered from the tool's real output by [tools/make_demo_gif.py](tools/make_demo_gif.py).
+
 ## The gallery
 
 Famous projects, formally reviewed: [the PIP Gallery](gallery/) has real report cards and
@@ -196,7 +214,7 @@ MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).
 
 ![PIP report card](pip-card.svg)
 
-**Grade: B (77/100)** · 20 commits reviewed · Top award: Night Owl · Reviewed 2026-11-19
+**Grade: B (81/100)** · 9 commits reviewed · Top award: Polyglot · Reviewed 2026-11-18
 
 *This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) (`on-a-pip --readme`). The record speaks for itself.*
 <!-- pip:end -->

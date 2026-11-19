@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="400" viewBox="0 0 680 400" role="img" aria-label="2026 in commits for Silas Malone">
+  <rect x="3" y="3" width="674" height="394" fill="#191919" stroke="#e8b93c" stroke-width="3"/>
+  <text x="36" y="58" font-family="Georgia, serif" font-size="30" letter-spacing="3" fill="#e8b93c">YOUR 2026 IN COMMITS</text>
+  <text x="36" y="84" font-family="Georgia, serif" font-size="14" fill="#ccc">Silas Malone | decksmith-repo</text>
+  <rect x="36" y="104" width="86" height="68" rx="8" fill="#1d9e62"/>
+  <text x="79" y="154" font-family="Georgia, serif" font-size="48" font-weight="bold" fill="#fff" text-anchor="middle">A</text>
+  <text x="140" y="128" font-family="Georgia, serif" font-size="17" fill="#fff">30 commits</text>
+  <text x="140" y="152" font-family="Georgia, serif" font-size="14" fill="#bbb">Busiest month: August</text>
+  <text x="36" y="206" font-family="Georgia, serif" font-size="15" fill="#fff">Top award: Marathon Day</text>
+  <text x="36" y="232" font-family="Georgia, serif" font-size="15" fill="#fff">Catchphrase: "feat"</text>
+  <text x="36" y="258" font-family="Georgia, serif" font-size="13" font-style="italic" fill="#999">Exceeds expectations. Management is as surprised as you are.</text>
+<rect x="37.0" y="270.0" width="606.0" height="60.0" fill="#e8b93c"/>
+  <text x="340" y="386" font-family="Georgia, serif" font-size="11" fill="#888" text-anchor="middle">PIP Wrapped. Generated locally from git history. pip install on-a-pip</text>
+</svg>
