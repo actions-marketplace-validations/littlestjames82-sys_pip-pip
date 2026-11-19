@@ -18,6 +18,8 @@ Every developer keeps a work diary without knowing it: their git history. Every 
 pip install on-a-pip
 ```
 
+(or keep it isolated: `pipx install on-a-pip`. The project site lives at https://littlestjames82-sys.github.io/pip-pip/)
+
 Then, inside any git repository:
 
 ```
@@ -214,7 +216,7 @@ MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).
 
 ![PIP report card](pip-card.svg)
 
-**Grade: B (76/100)** · 21 commits reviewed · Top award: Night Owl · Reviewed 2026-11-19
+**Grade: B (81/100)** · 9 commits reviewed · Top award: Polyglot · Reviewed 2026-11-18
 
 *This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) (`on-a-pip --readme`). The record speaks for itself.*
 <!-- pip:end -->

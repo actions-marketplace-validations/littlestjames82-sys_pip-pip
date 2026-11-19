@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PIP: Your git history puts you on a Performance Improvement Plan</title>
+<meta name="description" content="PIP reads your local git history and issues a formal manager-style performance review of the programmer. Grades, evidence, awards, report cards. No AI, no uploads. pip install on-a-pip">
+<meta property="og:title" content="PIP: a performance review generated from your git history">
+<meta property="og:description" content="Five graded categories, evidence, 21 awards, and a 30-day plan. Local only, plain arithmetic, not for employment decisions.">
+<meta property="og:type" content="website">
+<style>
+  :root { --paper:#fdfcf8; --ink:#1d1a16; --muted:#6f6a5e; --line:#d8d2c4; --accent:#b3261e; --gold:#8a6d1a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#ece7da; color:var(--ink); font-family: Georgia, 'Times New Roman', serif; }
+  .sheet { max-width: 880px; margin: 0 auto; background: var(--paper); padding: 48px 40px 40px; box-shadow: 0 2px 24px rgba(30,25,15,.18); }
+  header.top { display:flex; justify-content:space-between; align-items:flex-start; border-bottom: 3px double var(--ink); padding-bottom: 14px; }
+  .form-no { font-size: 12px; letter-spacing: .18em; color: var(--muted); text-transform: uppercase; }
+  .stamp { border: 3px solid var(--accent); color: var(--accent); font-weight: bold; letter-spacing: .14em;
+           padding: 6px 12px; transform: rotate(4deg); font-size: 14px; text-transform: uppercase; border-radius: 4px; }
+  h1 { font-size: 44px; line-height: 1.08; margin: 30px 0 6px; }
+  h1 .pip { color: var(--accent); }
+  .tagline { font-size: 21px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 16.5px; line-height: 1.55; max-width: 640px; }
+  .install { background:#141210; color:#f2ead8; font-family: Menlo, Consolas, monospace; font-size: 17px;
+             padding: 14px 18px; border-radius: 6px; margin: 22px 0 8px; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;}
+  .install .alt { color:#9c9482; font-size: 13.5px; }
+  .cta { display:flex; gap:10px; flex-wrap:wrap; margin: 14px 0 6px; }
+  .cta a { border: 1.5px solid var(--ink); color: var(--ink); text-decoration:none; padding: 9px 16px; border-radius: 999px; font-size: 15px; }
+  .cta a.primary { background: var(--ink); color: var(--paper); }
+  img.demo { width: 100%; border: 1px solid var(--line); border-radius: 8px; margin: 20px 0 4px; }
+  .caption { color: var(--muted); font-size: 13.5px; text-align:center; margin: 2px 0 10px; }
+  h2 { font-size: 25px; margin: 38px 0 6px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  p, li { font-size: 16.5px; line-height: 1.6; }
+  .grades { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0; }
+  .grade { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .grade b { display:block; font-size: 16px; margin-bottom: 4px; }
+  .grade span { color: var(--muted); font-size: 14px; line-height: 1.45; display:block; }
+  .cards { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 16px 0; }
+  .cards figure { margin:0; }
+  .cards img { width:100%; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .cards figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .cards figcaption b { color: var(--ink); }
+  .fair { background:#f5f1e6; border:1px solid var(--line); border-radius: 8px; padding: 6px 20px 12px; }
+  .notice { border: 2px solid var(--accent); border-radius: 8px; padding: 12px 18px; margin: 26px 0; }
+  .notice b { color: var(--accent); letter-spacing: .06em; }
+  footer { border-top: 3px double var(--ink); margin-top: 40px; padding-top: 14px; color: var(--muted); font-size: 14.5px;
+           display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  footer a { color: var(--ink); }
+  @media (max-width: 640px) { .sheet { padding: 30px 20px; } h1 { font-size: 32px; } }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<header class="top">
+  <div>
+    <div class="form-no">Form PIP-2026 &middot; Personnel File</div>
+    <div class="form-no">Subject: The Programmer</div>
+  </div>
+  <div class="stamp">Under Review</div>
+</header>
+
+<h1>Your git history just put you on a <span class="pip">PIP</span>.</h1>
+<p class="tagline">Every tool reviews your code. <b>PIP reviews the programmer.</b></p>
+<p class="sub">Every developer keeps a work diary without knowing it: their git history. PIP reads that record,
+locally, on your own machine, and issues a formal manager-style performance review. Five graded categories,
+evidence drawn from your own commits, 21 awards, shareable report cards, and a 30-day improvement plan.</p>
+
+<div class="install"><span>$ pip install on-a-pip</span><span class="alt">or: pipx install on-a-pip &middot; Python 3.9+ &middot; zero dependencies</span></div>
+
+<div class="cta">
+  <a class="primary" href="https://github.com/littlestjames82-sys/pip-pip">GitHub</a>
+  <a href="https://pypi.org/project/on-a-pip/">PyPI</a>
+  <a href="https://news.ycombinator.com/item?id=50556132">Show HN discussion</a>
+  <a href="https://dev.to/littlestjames82sys/i-put-myself-on-a-pip-a-performance-review-generated-from-my-own-git-history-22kn">The write-up</a>
+</div>
+
+<img class="demo" src="assets/demo.gif" alt="Terminal session: pip install on-a-pip, then a full performance review with grades and awards">
+<p class="caption">A real review, rendered from the tool's actual output. No mockup.</p>
+
+<h2>What it grades</h2>
+<div class="grades">
+  <div class="grade"><b>Communication</b><span>How many of your commit messages actually say anything. "stuff" and "wip" are entered into the record.</span></div>
+  <div class="grade"><b>Reliability</b><span>Commits between 10pm and 5am. Friday-after-4pm shipping. Reverts. Chains of "fix".</span></div>
+  <div class="grade"><b>Follow-through</b><span>The TODOs still sitting in your code, and how old the oldest one is. A 400-day TODO has seniority.</span></div>
+  <div class="grade"><b>Judgment</b><span>The spots labelled "temporary", "hack" or "workaround", and how long they have been load-bearing.</span></div>
+  <div class="grade"><b>Consistency</b><span>Active days versus silent stretches. Longest streak. Longest disappearance.</span></div>
+</div>
+<p>Then it writes you a <b>30-day improvement plan</b> from your three weakest categories, and signs off with the
+only appeal process that has ever worked: improve the record. Choose your manager: Corporate, Startup CTO,
+Supportive Lead, Passive-Aggressive Middle Manager, Pirate Captain, or Noir Detective. The evidence never
+changes. The tone absolutely does.</p>
+
+<h2>Famous projects, formally reviewed</h2>
+<div class="cards">
+  <figure><img src="assets/gallery-requests.svg" alt="PIP report card for Requests"><figcaption><b>Requests.</b> Its creator grades out at a D: Night Owl, 3,148 commits deep. Top of the board: Cory Benfield, C 64.8.</figcaption></figure>
+  <figure><img src="assets/gallery-flask.svg" alt="PIP report card for Flask"><figcaption><b>Flask.</b> David Lord, C 62.4. The record is the record.</figcaption></figure>
+  <figure><img src="assets/gallery-express.svg" alt="PIP report card for Express"><figcaption><b>Express.</b> Tj Holowaychuk, C 72.3.</figcaption></figure>
+  <figure><img src="assets/gallery-normalize.svg" alt="PIP report card for normalize.css"><figcaption><b>normalize.css.</b> battaglr, B 75.0. The only B in the gallery.</figcaption></figure>
+</div>
+<p>Full reviews and leaderboards live in the <a href="https://github.com/littlestjames82-sys/pip-pip/tree/main/gallery">gallery in the repo</a>.
+PIP reviewed its own author too: a B, with a Follow-through D, because the tool's own source contains the TODO markers it grades everyone else on.</p>
+
+<h2>Fair by default</h2>
+<div class="fair">
+<p>Commit records are terrible evidence about people, so the grading is honest about it:</p>
+<ul>
+  <li><b>Bots are excluded by default.</b> Dependabot does not need a performance review. (<code>--include-bots</code> if you disagree.)</li>
+  <li><b>Co-authors get credit</b> from Co-authored-by trailers.</li>
+  <li><b>Lockfiles and minified files do not count as churn.</b></li>
+  <li><b>Squash-merge-heavy histories carry an authorship note:</b> the grade belongs to whoever pressed the merge button.</li>
+  <li><b><code>--tz Europe/Berlin</code></b> grades in your timezone, not the server's.</li>
+</ul>
+</div>
+
+<div class="notice"><b>NOT FOR EMPLOYMENT DECISIONS.</b> PIP grades a commit record, not a person, and it reads best when the person reading it is the person who wrote the commits.</div>
+
+<h2>Private by construction</h2>
+<p>No AI. No models. No uploads, accounts, or telemetry. PIP is one Python file of plain arithmetic in the
+standard library, so every grade can be traced back to the record that produced it. It runs <code>git log</code>,
+<code>git grep</code> and <code>git blame</code> on your machine and nothing else. Your history is embarrassing
+enough without uploading it somewhere.</p>
+<p>Report cards, README badges, team leaderboards, head-to-head mode, coaching plans, single-file reviews,
+org boards, and a Wrapped mode for your year in commits are all in the box.</p>
+
+<img src="assets/sample-share-card.svg" alt="PIP share card" style="width:100%; border:1px solid var(--line); border-radius:8px;">
+<p class="caption">The 1200x630 share card (<code>--share</code>), sized for social posts.</p>
+
+<footer>
+  <span>PIP is built by <a href="https://ghostdeveloperstudio.com">Ghost Developer Studio</a>. MIT licensed.</span>
+  <span><a href="https://github.com/littlestjames82-sys/pip-pip">GitHub</a> &middot; <a href="https://pypi.org/project/on-a-pip/">PyPI</a></span>
+</footer>
+
+</div>
+</body>
+</html>
