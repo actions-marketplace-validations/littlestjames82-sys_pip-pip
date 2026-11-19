@@ -462,3 +462,77 @@ class IsoParseTest(unittest.TestCase):
         self.assertEqual(pip_pip._parse_iso("2026-01-23T23:30:00+00:00").hour, 23)
         self.assertEqual(pip_pip._parse_iso("2026-01-23T23:30:00-05:00").utcoffset(),
                          timedelta(hours=-5))
+
+
+class V6FeaturesTest(unittest.TestCase):
+    def _two_author_repo(self, tmp):
+        repo = os.path.join(tmp, "versus")
+        make_repo(repo)
+        commit(repo, at(30, 23, 30), "stuff", files={"a.py": "x\n"})
+        commit(repo, at(29, 1, 0), "wip", append={"a.py": "y\n"})
+        commit(repo, at(28, 9), "asdf", append={"a.py": "z\n"})
+        for i, subject in enumerate([
+                "add export feature with tests and docs",
+                "fix session timeout with a regression test",
+                "document the deployment process for the team"]):
+            commit(repo, at(20 - i * 3, 11), subject,
+                   body="Reasoning recorded for the next reader.",
+                   author="Tidy Example <tidy@example.com>",
+                   files={"t.py": f"# {i}\n"} if i == 0 else None,
+                   append={"t.py": f"# m{i}\n"} if i > 0 else None)
+        return repo
+
+    def test_head_to_head(self):
+        tmp = tempfile.mkdtemp()
+        repo = self._two_author_repo(tmp)
+        commits = pip_pip.collect_commits(repo, 10000)
+        stats, file_totals = pip_pip.collect_numstat(repo, {c.sha for c in commits})
+        for c in commits:
+            if c.sha in stats:
+                c.added, c.deleted, c.files = stats[c.sha]
+        markers = pip_pip.collect_markers(repo)
+        dev = pip_pip.analyze(repo, commits, markers, "Dev Example", date.today(),
+                              file_totals=file_totals)
+        tidy = pip_pip.analyze(repo, commits, markers, "Tidy", date.today(),
+                               file_totals=file_totals)
+        text = pip_pip.render_vs(dev, tidy)
+        self.assertIn("HEAD TO HEAD", text)
+        self.assertIn("Tidy Example wins decisively", text)
+        md = pip_pip.render_vs_markdown(dev, tidy)
+        self.assertIn("**Overall**", md)
+        self.assertIn("Tidy Example", md)
+
+    def test_scan_finds_each_repo(self):
+        tmp = tempfile.mkdtemp()
+        root = os.path.join(tmp, "fleet")
+        os.makedirs(root)
+        for name, author in (("alpha", None), ("beta", "Tidy Example <tidy@example.com>")):
+            repo = os.path.join(root, name)
+            make_repo(repo)
+            commit(repo, at(9, 10), "a documented change for the scan fixture",
+                   author=author, files={"a.py": "x\n"})
+            commit(repo, at(4, 10), "a second explained improvement on record",
+                   author=author, append={"a.py": "y\n"})
+        os.makedirs(os.path.join(root, "not-a-repo"))
+        results = pip_pip.scan_repos(root)
+        self.assertEqual(sorted(name for name, _ in results), ["alpha", "beta"])
+        text = pip_pip.render_scan(results, "fleet")
+        self.assertIn("PIP SCAN", text)
+
+    def test_mailmap_merges_identities(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "mapped")
+        make_repo(repo)
+        mailmap = "Canon Name <canon@example.com> <alt@example.com>\n"
+        commit(repo, at(40, 10), "first canonical commit with explanation",
+               author="Canon Name <canon@example.com>",
+               files={".mailmap": mailmap, "a.py": "x\n"})
+        commit(repo, at(30, 10), "second canonical commit with explanation",
+               author="Canon Name <canon@example.com>", append={"a.py": "y\n"})
+        commit(repo, at(20, 10), "an alt identity commit with explanation",
+               author="Alt Name <alt@example.com>", append={"a.py": "z\n"})
+        commit(repo, at(10, 10), "another alt identity commit on record",
+               author="Alt Name <alt@example.com>", append={"a.py": "w\n"})
+        review = review_of(repo)
+        self.assertEqual(review.author, "Canon Name")
+        self.assertEqual(review.total_commits, 4)

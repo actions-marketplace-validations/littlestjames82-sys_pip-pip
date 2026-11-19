@@ -83,6 +83,9 @@ on-a-pip --author "your name"     # review one author (default: the most prolifi
 on-a-pip --days 90                # just the last 90 days of history
 on-a-pip --since 2026-01-01 --until 2026-03-31   # or a calendar window
 on-a-pip --reference letter.md    # also write a letter of reference, based on the grade
+on-a-pip --vs "Alice" "Bob"       # head to head: two authors, one repo, one winner
+on-a-pip --scan ~/projects        # review the top author of every repo in a folder
+on-a-pip --quarter                # the quarterly ritual: last 90 days, compared to your last review
 on-a-pip --leaderboard            # review every author in the repo and rank them
 on-a-pip psf/requests               # or skip the local part entirely: any public repo by URL
 on-a-pip --json                   # machine-readable review
@@ -94,6 +97,9 @@ on-a-pip --json                   # machine-readable review
 - A **leaderboard mode** for shared repos. Run it on your team. We accept no responsibility for the standup that follows.
 - A **letter of reference** (`--reference`), written by management in the tone your grade deserves. A grades get a glowing letter. F grades get a short one.
 - Career stats in every review: busiest day ever, monthly activity sparkline, languages ranked by churn. Identities are grouped by email, so one person under two names is one employee, and two people sharing a name stay two rows.
+- **Head-to-head mode** (`--vs`): two authors compared category by category, with a declared winner and consequences for the loser.
+- **Folder scan** (`--scan`): point PIP at a directory of projects and get one ranked board of every repo's top author.
+- **Mailmap support:** if the repo has a `.mailmap`, PIP honors it, so identity merging follows the project's own records.
 
 Sample outputs live in [`examples/`](examples/): a full sample review, sample report cards, a badge, and a real report card generated from the Decksmith repository.
 
@@ -152,7 +158,7 @@ MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).
 
 ![PIP report card](pip-card.svg)
 
-**Grade: B (78/100)** · 14 commits reviewed · Top award: Night Owl · Reviewed 2026-11-19
+**Grade: B (81/100)** · 9 commits reviewed · Top award: Polyglot · Reviewed 2026-11-18
 
 *This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) (`on-a-pip --readme`). The record speaks for itself.*
 <!-- pip:end -->
