@@ -214,7 +214,7 @@ class OrgRunTest(unittest.TestCase):
         pip_pip.fetch_org_repos = lambda org, limit, include_forks: [("demo", repo)]
         args = types.SimpleNamespace(org="demo-org", org_limit=5, include_forks=False,
                                      persona=None, max_commits=10000, json=False,
-                                     csv=None)
+                                     csv=None, shallow=None)
         try:
             import contextlib
             buf = io.StringIO()
@@ -226,6 +226,58 @@ class OrgRunTest(unittest.TestCase):
         out = buf.getvalue()
         self.assertIn("demo", out)
         self.assertIn("Dev Example", out)
+
+
+class WrappedKitTest(unittest.TestCase):
+    def _review(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        repo = os.path.join(tmp, "demo")
+        make_repo(repo)
+        commit(repo, datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc),
+               "feat: spring thing", files={"a.py": "x = 1\n"})
+        commit(repo, datetime(2026, 3, 6, 23, 0, tzinfo=timezone.utc),
+               "fix: late fix", files={"a.py": "x = 2\n"})
+        commits = pip_pip.collect_commits(repo, 10000)
+        stats, file_totals, paths_by_sha = pip_pip.collect_numstat(
+            repo, {c.sha for c in commits})
+        for c in commits:
+            if c.sha in stats:
+                c.added, c.deleted, c.files = stats[c.sha]
+            c.paths = tuple(paths_by_sha.get(c.sha, ()))
+        markers = pip_pip.collect_markers(repo)
+        return pip_pip.analyze(repo, commits, markers, None,
+                               datetime(2026, 12, 1, tzinfo=timezone.utc).date())
+
+    def test_posts_short_fits_x_and_carry_the_facts(self):
+        text = pip_pip.render_wrapped_posts(self._review(), 2026)
+        short = text.split("\n")[1]
+        self.assertLessEqual(len(short), 280)
+        self.assertIn("pip install on-a-pip", short)
+        self.assertIn("2026", short)
+        self.assertIn("Not for employment", text)
+
+    def test_kit_writes_card_and_posts(self):
+        import contextlib
+        from unittest import mock
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        repo = os.path.join(tmp, "demo")
+        make_repo(repo)
+        commit(repo, datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc),
+               "feat: spring thing", files={"a.py": "x = 1\n"})
+        kit = os.path.join(tmp, "kit")
+        argv = ["on-a-pip", repo, "--year", "2026", "--wrapped-kit", kit,
+                "--author", "Dev Example"]
+        buf = io.StringIO()
+        with mock.patch.object(sys, "argv", argv):
+            with contextlib.redirect_stdout(buf):
+                code = pip_pip.main()
+        self.assertEqual(code, 0)
+        self.assertTrue(os.path.exists(os.path.join(kit, "wrapped-2026.svg")))
+        posts = open(os.path.join(kit, "post.txt")).read()
+        self.assertIn("SHORT", posts)
+        self.assertIn("STANDARD", posts)
 
 
 if __name__ == "__main__":

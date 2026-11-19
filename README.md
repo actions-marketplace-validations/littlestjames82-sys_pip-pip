@@ -128,7 +128,7 @@ on-a-pip --json                   # machine-readable review
 - **Head-to-head mode** (`--vs`): two authors compared category by category, with a declared winner and consequences for the loser.
 - **Folder scan** (`--scan`): point PIP at a directory of projects and get one ranked board of every repo's top author.
 - **Mailmap support:** if the repo has a `.mailmap`, PIP honors it, so identity merging follows the project's own records.
-- **PIP Wrapped** (`--year`): the year-in-commits edition, with its own dark Wrapped card: busiest month, top award, your catchphrase.
+- **PIP Wrapped** (`--year`): the year-in-commits edition, with its own dark Wrapped card: busiest month, top award, your catchphrase. `--wrapped-kit DIR` packages the card with ready-to-post text in two lengths, built from your numbers.
 - **Hall of fame stats:** longest commit message (the novel), shortest (the haiku), and your catchphrase, the word your subjects cannot stop using.
 - Report cards chart your commits per month; `--outdir` writes the full artifact set in one run; `--fail-below` turns a grade into a CI gate.
 - **History** (`--history`): every review is saved locally, so your grade becomes a trend line with bars, not a one-off verdict.
@@ -230,7 +230,7 @@ MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).
 
 ![PIP report card](pip-card.svg)
 
-**Grade: B (75/100)** · 24 commits reviewed · Top award: Night Owl · Reviewed 2026-11-19
+**Grade: B (81/100)** · 9 commits reviewed · Top award: Polyglot · Reviewed 2026-11-18
 
 *This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) (`on-a-pip --readme`). The record speaks for itself.*
 <!-- pip:end -->

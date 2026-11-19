@@ -3,6 +3,16 @@
 All notable changes to PIP (PyPI: `on-a-pip`) are recorded here. Versions are
 the tool's own; the record is the record.
 
+## 1.2.0
+
+- `--wrapped-kit DIR`: a share kit for the year. Writes the Wrapped card
+  (SVG) and a post.txt with two ready-to-post drafts (a short one sized
+  for X, a standard one for LinkedIn/Facebook), built from your own
+  numbers. Implies `--year` for the current year when none is given.
+- Org mode is usable on big accounts now: each repo prints a progress
+  line to stderr as it is reviewed, and `--shallow N` is honored by org
+  clones, so a huge repository no longer means a long silent wait.
+
 ## 1.1.1
 
 - Org mode repaired: `--org` crashed with a NameError once it got past the

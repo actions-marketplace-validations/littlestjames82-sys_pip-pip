@@ -30,7 +30,7 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "1.1.1"
+__version__ = "1.2.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -458,9 +458,12 @@ def fetch_org_repos(user: str, limit: int = 10, include_forks: bool = False,
     return repos
 
 
-def _clone(url: str, dest: str) -> None:
-    r = subprocess.run(["git", "clone", "--quiet", url, dest],
-                       capture_output=True, text=True)
+def _clone(url: str, dest: str, shallow: int | None = None) -> None:
+    cmd = ["git", "clone", "--quiet"]
+    if shallow:
+        cmd += ["--depth", str(shallow)]
+    cmd += [url, dest]
+    r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         raise PipError(f"clone failed for {url}")
 
@@ -495,10 +498,12 @@ def _run_org(args) -> int:
     rows: list[tuple[str, Review]] = []
     tmp_root = tempfile.mkdtemp(prefix="on-a-pip-org-")
     try:
-        for name, url in repos:
+        for i, (name, url) in enumerate(repos, 1):
+            print(f"on-a-pip: reviewing {name} ({i} of {len(repos)})...",
+                  file=sys.stderr)
             dest = os.path.join(tmp_root, name)
             try:
-                _clone(url, dest)
+                _clone(url, dest, shallow=args.shallow)
                 commits = collect_commits(dest, args.max_commits)
                 if not commits:
                     continue
@@ -1232,6 +1237,36 @@ def render_wrapped_svg(review: Review, year: int) -> str:
 """
 
 
+def render_wrapped_posts(review: Review, year: int) -> str:
+    """Ready-to-post text for a Wrapped card, in two lengths."""
+    import calendar as _cal
+    months = review.highlights.get("months") or []
+    busiest = ""
+    if months:
+        label, n = max(months, key=lambda kv: kv[1])
+        busiest = f"{_cal.month_name[int(label.split('-')[1])]} ({n} commits)"
+    award = review.awards[0][0] if review.awards else "none"
+    grade = f"{review.overall_letter} ({review.overall_score:.0f}/100)"
+    short = (f"My {year} in commits: {review.total_commits} commits, grade {grade}, "
+             f"top award {award}. My git history put me on a Performance "
+             f"Improvement Plan. Get yours: pip install on-a-pip")
+    standard = "\n".join([
+        f"My {year} in commits, as graded by PIP:",
+        f"Commits: {review.total_commits}   Grade: {grade}",
+        f"Busiest month: {busiest or 'n/a'}   Top award: {award}",
+        f"Catchphrase: \"{review.highlights.get('top_word') or 'n/a'}\"",
+        "",
+        "PIP reads your local git history and issues a formal performance",
+        "review of the programmer. No AI, no uploads. Not for employment",
+        "decisions: it grades a commit record, not a person.",
+        "",
+        "pip install on-a-pip",
+        "https://github.com/littlestjames82-sys/pip-pip",
+    ])
+    return (f"SHORT (X / Bluesky, {len(short)} chars)\n{short}\n\n"
+            f"STANDARD (LinkedIn / Facebook)\n{standard}\n")
+
+
 def render_share_svg(review: Review) -> str:
     """The 1200x630 share card: the size social platforms actually render."""
     color = GRADE_COLORS[review.overall_letter]
@@ -1771,6 +1806,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="quarterly ritual mode: review the last 90 days and compare with your last review")
     ap.add_argument("--year", type=int, metavar="YYYY",
                     help="Wrapped mode: review one calendar year and print the year-in-commits edition")
+    ap.add_argument("--wrapped-kit", metavar="DIR",
+                    help="write a share kit for the year (Wrapped card + ready-to-post text) into DIR; implies --year for the current year when none is given")
     ap.add_argument("--top", type=int, default=8, help="leaderboard size (default 8)")
     ap.add_argument("--outdir", metavar="DIR",
                     help="write every artifact (review, cards, badge, reference, JSON) into this directory")
@@ -1863,6 +1900,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.quarter and args.days is None and not (args.since or args.until):
         args.days = 90
+    if args.wrapped_kit and not args.year:
+        args.year = date.today().year
     if args.year and not (args.since or args.until):
         args.since = f"{args.year}-01-01"
         args.until = f"{args.year}-12-31"
@@ -2002,6 +2041,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Post text: My git history just put me on a Performance Improvement Plan. "
               f"Grade: {review.overall_letter} ({review.overall_score:.0f}/100). "
               f"Get yours: pip install on-a-pip")
+    if args.wrapped_kit:
+        os.makedirs(args.wrapped_kit, exist_ok=True)
+        card_path = os.path.join(args.wrapped_kit, f"wrapped-{args.year}.svg")
+        with open(card_path, "w", encoding="utf-8") as f:
+            f.write(render_wrapped_svg(review, args.year))
+        posts_path = os.path.join(args.wrapped_kit, "post.txt")
+        with open(posts_path, "w", encoding="utf-8") as f:
+            f.write(render_wrapped_posts(review, args.year))
+        print(f"Wrapped kit written to {args.wrapped_kit} ({card_path}, {posts_path})")
     if args.outdir:
         os.makedirs(args.outdir, exist_ok=True)
         artifacts = {
