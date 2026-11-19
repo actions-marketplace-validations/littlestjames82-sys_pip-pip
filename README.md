@@ -34,7 +34,7 @@ on-a-pip https://github.com/psf/requests    # any git URL
 on-a-pip psf/requests --leaderboard        # rank the whole team
 ```
 
-PIP clones the repo into a temp folder, reviews it, and deletes the clone when it is done (`--keep` keeps it, `--shallow 500` fetches only recent history on huge repos). Reviewing a famous project is an education: the creator of Requests, 3,148 commits deep, grades out at a D with a Night Owl award. The record is the record.
+PIP clones the repo into a temp folder, reviews it, and deletes the clone when it is done (`--keep` keeps it, `--shallow 500` fetches only recent history on huge repos). Reviewing a famous project is an education: the creator of Requests grades out at a D with a Night Owl award, and his record splits into two leaderboard rows because he committed under two email addresses and the project has no mailmap to merge them. PIP counts identities the way git does. The record is the record.
 
 ```
   PERFORMANCE IMPROVEMENT PLAN  -  Dev Example
@@ -152,7 +152,7 @@ PIP Wrapped, the year in commits (`--year`):
 
 ![Sample Wrapped card](examples/sample-wrapped.svg)
 
-The full written review is in [examples/sample-review.md](examples/sample-review.md), and a rendered HTML card in [examples/report-card-decksmith.html](examples/report-card-decksmith.html). The demo GIF above is rendered from the tool's real output by [tools/make_demo_gif.py](tools/make_demo_gif.py).
+The full written review is in [examples/sample-review.md](examples/sample-review.md), a rendered HTML card in [examples/report-card-decksmith.html](examples/report-card-decksmith.html), a real leaderboard in [examples/sample-leaderboard.md](examples/sample-leaderboard.md), a head-to-head in [examples/sample-versus.md](examples/sample-versus.md), and a letter of reference in [examples/sample-reference.md](examples/sample-reference.md). The demo GIF above is rendered from the tool's real output by [tools/make_demo_gif.py](tools/make_demo_gif.py).
 
 ## The gallery
 
@@ -190,6 +190,15 @@ jobs:
 
 Every push gets a fresh review, committed by the bot. Your README becomes a living performance record, which is either motivating or a threat, depending on your habits.
 
+## Performance
+
+Measured on a modest cloud VM with PIP 1.1, full reviews including line counts:
+
+- **psf/requests:** 6,495 commits reviewed in about **2 seconds**.
+- **django/django:** the default 10,000-commit window in about **35 seconds**; the full 35,128-commit history (`--max-commits 40000`) in about the same, because most of the time is git reading line counts and grepping a very large tree, not the grading.
+
+Histories over 2,000 commits print a progress line instead of sitting silent. For a huge repo you only need the recent record from, `--shallow N` on a URL target reviews just that slice.
+
 ## Private by construction
 
 PIP runs `git log`, `git grep` and `git blame` on your machine and nothing else. No network, no account, no API key, no telemetry, pure Python standard library. Your history is embarrassing enough without uploading it somewhere.
@@ -216,7 +225,7 @@ MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).
 
 ![PIP report card](pip-card.svg)
 
-**Grade: B (76/100)** · 22 commits reviewed · Top award: Night Owl · Reviewed 2026-11-19
+**Grade: B (81/100)** · 9 commits reviewed · Top award: Polyglot · Reviewed 2026-11-18
 
 *This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) (`on-a-pip --readme`). The record speaks for itself.*
 <!-- pip:end -->

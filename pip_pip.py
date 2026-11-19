@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -586,14 +586,19 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
             author_filter: str | None, today: date,
             file_totals: dict[str, tuple[int, int, int]] | None = None,
             persona: str = "corporate", include_bots: bool = False,
-            tz=None) -> Review:
+            tz=None, author_key: str | None = None) -> Review:
     # Pick the employee: explicit filter, else the most prolific identity.
     # Identities group by email: one person under two names is one employee.
     if tz is not None:
         from dataclasses import replace as _replace
         commits_in = [_replace(c, when=c.when.astimezone(tz)) for c in commits_in]
     groups = _author_groups(commits_in, include_bots=include_bots)
-    if author_filter:
+    if author_key is not None:
+        exact = [(a, cs) for a, cs, k in groups if k == author_key]
+        if not exact:
+            raise PipError("that author identity is no longer in the record")
+        author, commits = exact[0]
+    elif author_filter:
         f = author_filter.lower()
         matches = [(a, cs) for a, cs, _k in groups
                    if f in a.lower() or any(f in (c.email or "").lower() for c in cs)]
@@ -865,7 +870,7 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
 
 
 BOT_RE = re.compile(
-    r"(\[bot\]|dependabot|renovate\[?\]?|github-actions|pre-commit-ci|codecov|"
+    r"(\[bot\]|[-_]bot\b|dependabot|renovate\[?\]?|github-actions|pre-commit-ci|codecov|"
     r"bors\[?\]?|mergify|semantic-release|release-please|imgbot|allcontributors|"
     r"deepsource|sonarcloud|snyk)", re.IGNORECASE)
 COAUTHOR_RE = re.compile(r"^Co-authored-by:\s*(.+?)\s*<([^>]+)>",
@@ -918,13 +923,14 @@ def leaderboard(repo: str, commits_in: list[Commit], markers: list[Marker],
     for name, count, key in ranked[:top]:
         if count < min_commits:
             continue
-        # Target the exact identity: by email when the key is one, so two
-        # people who share a display name never collapse into one row.
-        target = key if "@" in key else name
+        # Target the exact identity by its group key, so two identities who
+        # share a display name (one email-keyed, one name-keyed) never
+        # collapse into duplicate rows.
         try:
-            reviews.append(analyze(repo, commits_in, markers, target, today,
+            reviews.append(analyze(repo, commits_in, markers, None, today,
                                    file_totals=file_totals, persona=persona,
-                                   include_bots=include_bots, tz=tz))
+                                   include_bots=include_bots, tz=tz,
+                                   author_key=key))
         except PipError:
             continue
     return sorted(reviews, key=lambda r: -r.overall_score)
@@ -1895,6 +1901,10 @@ def main(argv: list[str] | None = None) -> int:
             commits = [c for c in commits if lo <= c.when.date() <= hi]
         if not commits:
             raise PipError("no commits in the requested period. Management cannot review a rumor.")
+        if len(commits) >= 2000:
+            print(f"on-a-pip: {len(commits):,} commits in the record; weighing the "
+                  "evidence (line counts can take a moment on large histories)...",
+                  file=sys.stderr)
         stats, file_totals, paths_by_sha = collect_numstat(
             repo, {c.sha for c in commits}, branch=args.branch, path=args.path,
             exclude_generated=not args.include_generated)

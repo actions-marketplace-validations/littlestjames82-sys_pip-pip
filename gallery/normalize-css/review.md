@@ -1,10 +1,10 @@
 # PERFORMANCE IMPROVEMENT PLAN
 
 **Employee:** battaglr  
-**Project reviewed:** gallery-normalize-css-uf2ts4_3  
+**Project reviewed:** normalize-css  
 **Review period:** 2015-04-02 to 2016-06-30  
 **Commits examined:** 10  
-**Review date:** 2026-11-18  
+**Review date:** 2026-11-19  
 **Reviewer:** Management (PIP, running locally on the employee's own machine)
 
 ## Overall assessment: B (75/100)
@@ -38,7 +38,7 @@ This review is based entirely on the employee's own git history, the work diary 
 ## Judgment: D (54/100)
 
 - 2 spots in the code are labelled temporary, a hack, or a workaround.
-- The oldest 'temporary' measure has been in production 5203 days. It is not temporary. It is load-bearing.
+- The oldest 'temporary' measure has been in production 5204 days. It is not temporary. It is load-bearing.
 - 0 commits were checked in openly marked as work in progress.
 
 **Management notes:** Temporary is the most permanent word in software. Labelling a hack as a hack is honesty many developers skip entirely.
@@ -53,11 +53,11 @@ This review is based entirely on the employee's own git history, the work diary 
 
 ## Additional findings
 
-- **Nemesis file:** package-lock.json - 4,307 lines of churn across the review period. You two have history.
+- **Nemesis file:** normalize.css - 4,286 lines of churn across the review period. You two have history.
 - **Largest single commit:** 285 lines changed in "Update and organize the normalize.css file". A bold unit of work.
 - **Weekend work:** 3 of 10 commits landed on a Saturday or Sunday.
 - **Busiest day:** 2016-03-14, with 4 commits.
-- **Languages by churn:** CSS (4,686 lines of churn), json (4,620 lines of churn), HTML (2,365 lines of churn), Markdown (1,060 lines of churn).
+- **Languages by churn:** CSS (4,686 lines of churn), HTML (2,365 lines of churn), Markdown (1,060 lines of churn), json (313 lines of churn).
 - **Longest commit message:** "Use explicit `outline-width` property instead of `outline`" (58 characters. A novel.)
 - **Shortest commit message:** "Remove double space". A haiku, if you squint.
 - **Catchphrase:** "remove", appearing 4 times across your commit subjects.
@@ -96,3 +96,5 @@ By continuing to commit, the employee acknowledges receipt of this plan. Appeals
 Signed,  
 **Management**  
 *PIP - pip install on-a-pip*
+
+*Not for employment decisions. PIP grades a commit record, not a person, and it reads best when the person reading it is the person who wrote the commits.*

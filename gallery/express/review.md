@@ -1,10 +1,10 @@
 # PERFORMANCE IMPROVEMENT PLAN
 
 **Employee:** Tj Holowaychuk  
-**Project reviewed:** gallery-express-avedcfdz  
+**Project reviewed:** express  
 **Review period:** 2010-04-11 to 2014-02-19  
 **Commits examined:** 2788  
-**Review date:** 2026-11-18  
+**Review date:** 2026-11-19  
 **Reviewer:** Management (PIP, running locally on the employee's own machine)
 
 ## Overall assessment: C (72/100)
@@ -33,7 +33,7 @@ This review is based entirely on the employee's own git history, the work diary 
 ## Follow-through: F (20/100)
 
 - 29 TODO/FIXME notes are still open in the current code.
-- The oldest surviving TODO has been waiting 2757 days (7.6 years). It has seniority now.
+- The oldest surviving TODO has been waiting 2758 days (7.6 years). It has seniority now.
 - Senior TODO on file: test/express.static.js:32 - ".get('/todo.txt')"
 
 **Management notes:** A TODO is a promise. Old TODOs are promises in default. Every TODO you do close is one the next person never has to meet.
@@ -70,12 +70,13 @@ This review is based entirely on the employee's own git history, the work diary 
 
 - **Friday Gambler:** 87 commits shipped on a Friday at or after 4pm. Courage, or something adjacent to it.
 - **Streak Keeper:** 15 active days in a row at the longest stretch. Showing up is a skill.
-- **Fossil Keeper:** A TODO has survived 2757 days in the code. It qualifies for the pension plan.
+- **Fossil Keeper:** A TODO has survived 2758 days in the code. It qualifies for the pension plan.
 - **Colourful Commentator:** 6 commit messages contain profanity. Honest, if not exactly handbook language.
 - **Marathon Day:** 70 commits in a single day (2011-11-08). Somewhere in there was a lunch break. Probably.
 - **The Purge:** One commit deleted 5,316 lines. Witnesses described the diff as 'mostly red'.
 - **Polyglot:** Meaningful churn in 38 languages. Jack of all trades, suspect in all of them.
 - **Old Faithful:** Commits spanning 3 years on the same codebase. It has outlived three roadmaps and a rebrand.
+- **The Archaeologist:** Revived 20 commit(s) touching files untouched for over a year. Brushed off the dust, read the ancient comments, understood nothing, proceeded anyway.
 
 ## 30-day improvement plan
 
@@ -103,3 +104,5 @@ By continuing to commit, the employee acknowledges receipt of this plan. Appeals
 Signed,  
 **Management**  
 *PIP - pip install on-a-pip*
+
+*Not for employment decisions. PIP grades a commit record, not a person, and it reads best when the person reading it is the person who wrote the commits.*

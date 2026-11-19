@@ -1,10 +1,10 @@
 # PERFORMANCE IMPROVEMENT PLAN
 
 **Employee:** David Lord  
-**Project reviewed:** gallery-flask-9lcvucet  
+**Project reviewed:** flask  
 **Review period:** 2015-10-30 to 2026-10-30  
-**Commits examined:** 1865  
-**Review date:** 2026-11-18  
+**Commits examined:** 1870  
+**Review date:** 2026-11-19  
 **Reviewer:** Management (PIP, running locally on the employee's own machine)
 
 ## Overall assessment: C (62/100)
@@ -16,15 +16,15 @@ This review is based entirely on the employee's own git history, the work diary 
 
 ## Communication: A (100/100)
 
-- 22 of 1865 commit messages (1%) say almost nothing (average message length: 42 characters).
+- 22 of 1870 commit messages (1%) say almost nothing (average message length: 42 characters).
 - Entered into the record: "failing test", "Update CHANGES", "fix links".
-- 735 of 1865 commits (39%) include any explanation beyond the subject line.
+- 740 of 1870 commits (40%) include any explanation beyond the subject line.
 
 **Management notes:** Commit messages are the only explanation future maintainers get. When you write a real message, it tends to be a genuinely useful one.
 
 ## Reliability: A (97/100)
 
-- 40 of 1865 commits (2%) were made between 10pm and 5am.
+- 43 of 1870 commits (2%) were made between 10pm and 5am.
 - 38 commits landed on a Friday at or after 4pm, the industry's most dangerous hour.
 - 6 commits are reverts (0%) and 89 (5%) begin with the word 'fix'.
 
@@ -33,7 +33,7 @@ This review is based entirely on the employee's own git history, the work diary 
 ## Follow-through: D (42/100)
 
 - 9 TODO/FIXME notes are still open in the current code.
-- The oldest surviving TODO has been waiting 2753 days (7.5 years). It has seniority now.
+- The oldest surviving TODO has been waiting 2754 days (7.5 years). It has seniority now.
 - Senior TODO on file: tests/test_testing.py:122 - "bp = flask.Blueprint("company", __name__, subdomain="xxx")"
 
 **Management notes:** A TODO is a promise. Old TODOs are promises in default. Every TODO you do close is one the next person never has to meet.
@@ -41,14 +41,14 @@ This review is based entirely on the employee's own git history, the work diary 
 ## Judgment: F (22/100)
 
 - 14 spots in the code are labelled temporary, a hack, or a workaround.
-- The oldest 'temporary' measure has been in production 6068 days. It is not temporary. It is load-bearing.
+- The oldest 'temporary' measure has been in production 6069 days. It is not temporary. It is load-bearing.
 - 0 commits were checked in openly marked as work in progress.
 
 **Management notes:** Temporary is the most permanent word in software. Labelling a hack as a hack is honesty many developers skip entirely.
 
 ## Consistency: D (51/100)
 
-- Active on 528 of 4019 days in the review period (13%).
+- Active on 532 of 4019 days in the review period (13%).
 - Longest streak: 7 days. Longest disappearance: 82 days.
 - Average output on an active day: 3.5 commits.
 
@@ -58,13 +58,13 @@ This review is based entirely on the employee's own git history, the work diary 
 
 - **Nemesis file:** uv.lock - 12,229 lines of churn across the review period. You two have history.
 - **Largest single commit:** 5,577 lines changed in "rewrite tutorial docs and example". A bold unit of work.
-- **Weekend work:** 379 of 1865 commits landed on a Saturday or Sunday.
+- **Weekend work:** 381 of 1870 commits landed on a Saturday or Sunday.
 - **Busiest day:** 2019-01-06, with 28 commits.
 - **Languages by churn:** Python (96,178 lines of churn), rst (46,130 lines of churn), lock (12,229 lines of churn), txt (4,728 lines of churn).
 - **Longest commit message:** "use specific pypy versions for travis xenial remove 3.6 from appveyor, reduce in tox remove deprecated travis feature "sudo: false" split docs and devel,lowest travis envs remove osx py2 env in attempt to finish faster move travis matrix to python key" (251 characters. A novel.)
 - **Shortest commit message:** "use uv". A haiku, if you squint.
 - **Catchphrase:** "merge", appearing 907 times across your commit subjects.
-- **Net lines:** 41,843 added, 40,870 deleted.
+- **Net lines:** 41,965 added, 40,960 deleted.
 - **Language:** 1 commit messages contain profanity. The record reflects the journey.
 
 ## Awards
@@ -72,11 +72,13 @@ This review is based entirely on the employee's own git history, the work diary 
 - **Friday Gambler:** 38 commits shipped on a Friday at or after 4pm. Courage, or something adjacent to it.
 - **The Ghost:** Vanished for 82 days once, then returned as if nothing happened. It had, in fact, happened.
 - **Streak Keeper:** 7 active days in a row at the longest stretch. Showing up is a skill.
-- **Fossil Keeper:** A TODO has survived 2753 days in the code. It qualifies for the pension plan.
+- **Fossil Keeper:** A TODO has survived 2754 days in the code. It qualifies for the pension plan.
 - **Marathon Day:** 28 commits in a single day (2019-01-06). Somewhere in there was a lunch break. Probably.
 - **The Purge:** One commit deleted 2,237 lines. Witnesses described the diff as 'mostly red'.
 - **Polyglot:** Meaningful churn in 34 languages. Jack of all trades, suspect in all of them.
 - **Old Faithful:** Commits spanning 11 years on the same codebase. It has outlived three roadmaps and a rebrand.
+- **Merge Goblin:** 1038 of 1870 commits are merges. Somewhere upstream, a rebase weeps quietly.
+- **The Archaeologist:** Revived 112 commit(s) touching files untouched for over a year. Brushed off the dust, read the ancient comments, understood nothing, proceeded anyway.
 
 ## 30-day improvement plan
 
@@ -104,3 +106,5 @@ By continuing to commit, the employee acknowledges receipt of this plan. Appeals
 Signed,  
 **Management**  
 *PIP - pip install on-a-pip*
+
+*Not for employment decisions. PIP grades a commit record, not a person, and it reads best when the person reading it is the person who wrote the commits.*

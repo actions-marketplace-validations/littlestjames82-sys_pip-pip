@@ -1,10 +1,10 @@
 # PERFORMANCE IMPROVEMENT PLAN
 
 **Employee:** Cory Benfield  
-**Project reviewed:** gallery-requests-_20i0cr0  
+**Project reviewed:** requests  
 **Review period:** 2012-02-16 to 2017-11-27  
 **Commits examined:** 606  
-**Review date:** 2026-11-18  
+**Review date:** 2026-11-19  
 **Reviewer:** Management (PIP, running locally on the employee's own machine)
 
 ## Overall assessment: C (65/100)
@@ -33,7 +33,7 @@ This review is based entirely on the employee's own git history, the work diary 
 ## Follow-through: F (28/100)
 
 - 15 TODO/FIXME notes are still open in the current code.
-- The oldest surviving TODO has been waiting 5205 days (14.3 years). It has seniority now.
+- The oldest surviving TODO has been waiting 5206 days (14.3 years). It has seniority now.
 - Senior TODO on file: src/requests/auth.py:213 - "# XXX not implemented yet"
 
 **Management notes:** A TODO is a promise. Old TODOs are promises in default. Every TODO you do close is one the next person never has to meet.
@@ -41,7 +41,7 @@ This review is based entirely on the employee's own git history, the work diary 
 ## Judgment: D (46/100)
 
 - 4 spots in the code are labelled temporary, a hack, or a workaround.
-- The oldest 'temporary' measure has been in production 2984 days. It is not temporary. It is load-bearing.
+- The oldest 'temporary' measure has been in production 2985 days. It is not temporary. It is load-bearing.
 - 0 commits were checked in openly marked as work in progress.
 
 **Management notes:** Temporary is the most permanent word in software. Labelling a hack as a hack is honesty many developers skip entirely.
@@ -72,10 +72,12 @@ This review is based entirely on the employee's own git history, the work diary 
 - **Surgeon:** Small, precise commits, one concern at a time. Future archaeologists send their thanks.
 - **The Ghost:** Vanished for 85 days once, then returned as if nothing happened. It had, in fact, happened.
 - **Open Book:** 50% of commits carry a real explanation. Reviewers wept, briefly, with joy.
-- **Fossil Keeper:** A TODO has survived 5205 days in the code. It qualifies for the pension plan.
+- **Fossil Keeper:** A TODO has survived 5206 days in the code. It qualifies for the pension plan.
 - **The Purge:** One commit deleted 2,871 lines. Witnesses described the diff as 'mostly red'.
-- **Polyglot:** Meaningful churn in 40 languages. Jack of all trades, suspect in all of them.
+- **Polyglot:** Meaningful churn in 39 languages. Jack of all trades, suspect in all of them.
 - **Old Faithful:** Commits spanning 5 years on the same codebase. It has outlived three roadmaps and a rebrand.
+- **Merge Goblin:** 281 of 606 commits are merges. Somewhere upstream, a rebase weeps quietly.
+- **The Archaeologist:** Revived 12 commit(s) touching files untouched for over a year. Brushed off the dust, read the ancient comments, understood nothing, proceeded anyway.
 
 ## 30-day improvement plan
 
@@ -103,3 +105,5 @@ By continuing to commit, the employee acknowledges receipt of this plan. Appeals
 Signed,  
 **Management**  
 *PIP - pip install on-a-pip*
+
+*Not for employment decisions. PIP grades a commit record, not a person, and it reads best when the person reading it is the person who wrote the commits.*

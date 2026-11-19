@@ -961,3 +961,37 @@ class V10FeaturesTest(unittest.TestCase):
         self.assertIn(review.author, csv_text)
         md = pip_pip.render_markdown(review)
         self.assertIn("Not for employment decisions", md)
+
+
+class BotPatternTest(unittest.TestCase):
+    def test_dash_bot_names_are_bots_but_surnames_are_not(self):
+        self.assertTrue(pip_pip._is_bot("vue-bot", "vue-bot@users.noreply.github.com"))
+        self.assertTrue(pip_pip._is_bot("ci-bot", "ci@example.com"))
+        self.assertTrue(pip_pip._is_bot("my_bot", "b@example.com"))
+        self.assertFalse(pip_pip._is_bot("Talbot", "talbot@example.com"))
+        self.assertFalse(pip_pip._is_bot("Abbot", "abbot@example.com"))
+        self.assertFalse(pip_pip._is_bot("Sam Dev", "sam@example.com"))
+
+
+class V11FixTest(unittest.TestCase):
+    def test_leaderboard_never_duplicates_a_shared_name(self):
+        # Two identities share the display name "Sam Dev": one keyed by
+        # email, one name-keyed (empty email). The board must show both,
+        # with their own commit counts, never the big group twice.
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "sam")
+        make_repo(repo)
+        for i in range(8):
+            commit(repo, at(30 - i * 2, 10), f"sam email work number {i} with explanation",
+                   author="Sam Dev <sam@example.com>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        for i in range(5):
+            commit(repo, at(29 - i * 2, 11), f"sam noemail work number {i} with explanation",
+                   author="Sam Dev <>",
+                   files={"b.py": "x\n"} if i == 0 else None,
+                   append={"b.py": f"# {i}\n"} if i > 0 else None)
+        board = pip_pip.leaderboard(repo, pip_pip.collect_commits(repo, 1000),
+                                    pip_pip.collect_markers(repo), date.today())
+        counts = sorted(r.total_commits for r in board if r.author == "Sam Dev")
+        self.assertEqual(counts, [5, 8])

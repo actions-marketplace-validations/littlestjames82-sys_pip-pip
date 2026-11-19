@@ -1,0 +1,95 @@
+# Changelog
+
+All notable changes to PIP (PyPI: `on-a-pip`) are recorded here. Versions are
+the tool's own; the record is the record.
+
+## 1.1.0: The Fuller File
+
+- Progress line on stderr for large histories (2,000+ commits), so a big
+  review never looks hung.
+- Gallery doubled: FastAPI, Vue, Prettier, and Tokio join Requests, Flask,
+  Express, and normalize.css.
+- Three new sample persona packs: Drill Sergeant, The Therapist, The VC.
+  The persona pack format is documented and frozen as v1 in
+  [personas/README.md](personas/README.md).
+- New examples: a Requests leaderboard, a head-to-head (Reitz vs Benfield),
+  and a letter of reference.
+- Fixed `tools/make_gallery.py`, which had been carrying a mangled block
+  since the 0.8 plumbing change. The gallery is regenerated.
+- Bot detection now also catches `-bot`/`_bot` suffixed names (vue-bot
+  topped the Vue board before this). Surnames like Talbot and Abbot are
+  explicitly not bots, and are regression-tested as such.
+- Fixed a leaderboard bug the regenerated gallery exposed: when two
+  identities shared a display name and one was name-keyed (no email), the
+  board could show the larger identity twice. Boards now target identities
+  by their exact group key. Regression-tested.
+
+## 1.0.1
+
+- Fixed `clone_label` mangling repo names from Windows-style `file://`
+  paths. Found by the new Windows CI leg within an hour of it existing.
+
+## 1.0.0: The Front Door
+
+- Fair by default: bot authors excluded (`--include-bots` restores them),
+  Co-authored-by trailers earn shared credit, lockfiles and minified files
+  no longer count as churn, squash-merge-heavy histories carry an
+  authorship note.
+- `--tz` grades in the author's timezone. `--branch` and `--path` narrow
+  the record.
+- `--share` writes the 1200x630 share card. `--csv` prints boards as CSV.
+- "Not for employment decisions" on every artifact. The AI branding is
+  gone: PIP is plain arithmetic and says so.
+- README rebuilt around the verdict card. Windows and macOS CI legs.
+- First GitHub releases; project site at
+  https://littlestjames82-sys.github.io/pip-pip/
+
+## 0.9.0: The Org Chart
+
+- `--org` GitHub-user boards, pair stats on leaderboards, persona packs
+  (`--persona-file`) with Pirate Captain and Noir Detective samples, a
+  scheduled monthly-review Action example.
+
+## 0.8.0: The Personnel File
+
+- `--history` grade trend, `--coach` four-week drills, `--blame` single-file
+  reviews, `.pip.toml` repo config, award wave 2 (Merge Goblin, Lone Wolf,
+  Rubber Duck, The Archaeologist; 21 total).
+
+## 0.7.0
+
+- `--year` PIP Wrapped, hall-of-fame stats, commits-per-month bars on the
+  card, `--fail-below` CI gate, `--outdir` full artifact set, `--top`.
+
+## 0.6.0
+
+- `--vs` head-to-head, `--scan` folder mode, `.mailmap` support, `--quarter`.
+
+## 0.5.1
+
+- Fixed reviews silently emptying on Python 3.9/3.10 when git emits UTC
+  dates with a `Z` suffix.
+
+## 0.5.0
+
+- `--readme` mode (card, badge, marked README section), reusable GitHub
+  Action, self-review workflow.
+
+## 0.4.0
+
+- Identity grouping by email, career stats, five new awards, `--reference`
+  letter of reference, `--since`/`--until`.
+
+## 0.3.0
+
+- Review any public repo by URL or GitHub shorthand.
+
+## 0.2.0
+
+- 12-award system, four manager personas, `--leaderboard`, `--days`, SVG
+  report card and README badge, nemesis file, progress tracking.
+
+## 0.1.0
+
+- The first review: five graded categories, evidence, a 30-day plan,
+  terminal summary, Markdown review, HTML report card, `--json`.
