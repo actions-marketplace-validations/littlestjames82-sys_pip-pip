@@ -452,3 +452,13 @@ class ReadmeModeTest(unittest.TestCase):
         review = review_of(repo)
         with self.assertRaises(pip_pip.PipError):
             pip_pip.update_readme(repo, review)
+
+
+class IsoParseTest(unittest.TestCase):
+    def test_z_suffix_and_offsets(self):
+        # Modern git emits 'Z' for UTC in %aI; Python < 3.11 fromisoformat
+        # rejects it, which silently dropped every UTC commit. Regression test.
+        self.assertEqual(pip_pip._parse_iso("2026-01-23T23:30:00Z").hour, 23)
+        self.assertEqual(pip_pip._parse_iso("2026-01-23T23:30:00+00:00").hour, 23)
+        self.assertEqual(pip_pip._parse_iso("2026-01-23T23:30:00-05:00").utcoffset(),
+                         timedelta(hours=-5))

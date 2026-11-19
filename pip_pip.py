@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -120,6 +120,22 @@ class Marker:
     born: date | None       # date the line was introduced (blame), if known
 
 
+def _parse_iso(text: str) -> datetime:
+    """Parse git's %aI output on any supported Python. Modern git emits a
+    'Z' suffix for UTC, which datetime.fromisoformat only accepts from
+    Python 3.11; normalize it, and tolerate colon-less offsets too."""
+    t = text.strip()
+    if t.endswith(("Z", "z")):
+        t = t[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(t)
+    except ValueError:
+        m = re.search(r"([+-]\d{2})(\d{2})$", t)
+        if m:
+            return datetime.fromisoformat(t[:m.start()] + f"{m.group(1)}:{m.group(2)}")
+        raise
+
+
 def collect_commits(repo: str, max_commits: int) -> list[Commit]:
     fmt = FS.join(["%H", "%an", "%ae", "%aI", "%s", "%b"]) + RS
     out = _git(repo, ["log", f"--max-count={max_commits}", f"--format={fmt}"])
@@ -133,7 +149,7 @@ def collect_commits(repo: str, max_commits: int) -> list[Commit]:
             continue
         sha, author, email, iso, subject, body = parts[0], parts[1], parts[2], parts[3], parts[4], FS.join(parts[5:])
         try:
-            when = datetime.fromisoformat(iso)
+            when = _parse_iso(iso)
         except ValueError:
             continue
         commits.append(Commit(sha=sha, author=author, email=email, when=when,
