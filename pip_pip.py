@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -366,7 +366,168 @@ PERSONAS: dict[str, dict[str, object]] = {
         "plan_intro": "Just a few tiny suggestions. Again. For the third time. With feeling.",
         "signoff": "No need to reply. Your commit history already did.",
     },
+    "pirate": {
+        "label": "Pirate Captain",
+        "verdicts": {
+            "A": "A legend's logbook. The crew tells stories about these commits in port.",
+            "B": "Fine sailing. The charts be readable and the ship mostly dry.",
+            "C": "Ye be takin' on water in places, but the hull holds. Bail and mend.",
+            "D": "This logbook reads like a mutiny written in shorthand. We be talkin'.",
+            "F": "Even the parrot stopped repeatin' yer commit messages. To the plank of improvement with ye.",
+        },
+        "plan_intro": "Here be the chart to better waters. Follow it fer thirty days, or feed the fishes yer excuses.",
+        "signoff": "Signed in rum and salt water. The sea keeps the record, and so do I.",
+    },
+    "noir": {
+        "label": "Noir Detective",
+        "verdicts": {
+            "A": "The record was clean. Too clean, I almost said. Then I read it twice. It held up.",
+            "B": "A solid record in a city of flimsy ones. A few smudges on the glass, nothing more.",
+            "C": "The commits told a story. Half of it was missing, and the other half was in a hurry.",
+            "D": "I've seen this file before. Different name, same 2am timestamps, same one-word confessions.",
+            "F": "The record didn't just have gaps. It had alibis, and none of them checked out.",
+        },
+        "plan_intro": "Thirty days. Four leads worth following. Work them in order and don't skip the boring ones; the boring ones are where the truth hides.",
+        "signoff": "Case stays open until the record improves. It always improves, or it always closes. Your move.",
+    },
 }
+
+
+def fetch_org_repos(user: str, limit: int = 10, include_forks: bool = False,
+                    _opener=None) -> list[tuple[str, str]]:
+    """Public repos for a GitHub user/org via the API: (name, clone_url),
+    most recently pushed first, forks and archived repos skipped by default."""
+    import urllib.error
+    import urllib.request
+    url = f"https://api.github.com/users/{user}/repos?per_page=100&sort=pushed&type=owner"
+    req = urllib.request.Request(url, headers={"User-Agent": "on-a-pip",
+                                                "Accept": "application/vnd.github+json"})
+    opener = _opener or urllib.request.urlopen
+    try:
+        with opener(req) as resp:
+            data = json.load(resp)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise PipError(f"GitHub user '{user}' was not found")
+        if e.code == 403:
+            raise PipError("the GitHub API rate limit was reached. The org will still be there later.")
+        raise PipError(f"the GitHub API returned {e.code} for user '{user}'")
+    except (urllib.error.URLError, ValueError) as e:
+        raise PipError(f"could not reach the GitHub API: {e}")
+    repos: list[tuple[str, str]] = []
+    for r in data if isinstance(data, list) else []:
+        if r.get("fork") and not include_forks:
+            continue
+        if r.get("archived"):
+            continue
+        repos.append((str(r["name"]), str(r["clone_url"])))
+        if len(repos) >= limit:
+            break
+    return repos
+
+
+def _clone(url: str, dest: str) -> None:
+    r = subprocess.run(["git", "clone", "--quiet", url, dest],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        raise PipError(f"clone failed for {url}")
+
+
+def render_org(rows: list[tuple[str, Review]], user: str) -> str:
+    lines = ["", f"  PIP ORG BOARD  -  github.com/{user}  ({len(rows)} repositories)",
+             "  " + "-" * 62,
+             f"  {'#':<3} {'Repository':<22} {'Top author':<22} {'Grade':<6} {'Score':<7} Commits"]
+    for i, (name, r) in enumerate(rows, 1):
+        lines.append(f"  {i:<3} {name[:21]:<22} {r.author[:21]:<22} {r.overall_letter:<6} "
+                     f"{r.overall_score:<7.1f} {r.total_commits}")
+    lines.append("  " + "-" * 62)
+    mvp = rows[0][1]
+    prolific = max(rows, key=lambda kv: kv[1].total_commits)[1]
+    lines.append(f"  Org MVP: {mvp.author} ({mvp.overall_letter}, {mvp.overall_score:.0f}/100). "
+                 f"Most prolific: {prolific.author} ({prolific.total_commits} commits on their top repo).")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _run_org(args) -> int:
+    persona = args.persona or "corporate"
+    try:
+        repos = fetch_org_repos(args.org, limit=args.org_limit,
+                                include_forks=args.include_forks)
+    except PipError as e:
+        print(f"on-a-pip: {e}", file=sys.stderr)
+        return 2
+    if not repos:
+        print(f"on-a-pip: no public repositories found for '{args.org}'", file=sys.stderr)
+        return 2
+    rows: list[tuple[str, Review]] = []
+    tmp_root = tempfile.mkdtemp(prefix="on-a-pip-org-")
+    try:
+        for name, url in repos:
+            dest = os.path.join(tmp_root, name)
+            try:
+                _clone(url, dest)
+                commits = collect_commits(dest, args.max_commits)
+                if not commits:
+                    continue
+                stats, file_totals, paths_by_sha = collect_numstat(
+                    dest, {c.sha for c in commits})
+                for c in commits:
+                    if c.sha in stats:
+                        c.added, c.deleted, c.files = stats[c.sha]
+                        c.paths = tuple(paths_by_sha.get(c.sha, ()))
+                markers = collect_markers(dest)
+                review = analyze(dest, commits, markers, None, date.today(),
+                                 file_totals=file_totals, persona=persona)
+                rows.append((name, review))
+            except PipError:
+                continue
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    if not rows:
+        print(f"on-a-pip: none of {args.org}'s repositories could be reviewed", file=sys.stderr)
+        return 2
+    rows.sort(key=lambda kv: -kv[1].overall_score)
+    if args.json:
+        print(json.dumps({"org": args.org,
+                          "repos": [{"repo": name, **review_to_json(r)} for name, r in rows]},
+                         indent=2, default=str))
+    else:
+        print(render_org(rows, args.org))
+    return 0
+
+
+def load_persona_file(path: str) -> str:
+    """Load a custom persona pack (JSON) and register it in PERSONAS.
+
+    Format: {"name": "pirate", "label": "Pirate Captain",
+             "verdicts": {"A": "...", ...}, "plan_intro": "...", "signoff": "..."}
+    Only "name" is required; anything missing falls back to Corporate wording.
+    Returns the persona key to use."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except OSError:
+        raise PipError(f"persona file not found: {path}")
+    except ValueError:
+        raise PipError(f"persona file is not valid JSON: {path}")
+    if not isinstance(data, dict) or not data.get("name"):
+        raise PipError("persona file needs at least a \"name\" field")
+    key = re.sub(r"[^a-z0-9-]+", "-", str(data["name"]).lower()).strip("-") or "custom"
+    verdicts = dict(VERDICTS)
+    provided = data.get("verdicts")
+    if isinstance(provided, dict):
+        for grade in ("A", "B", "C", "D", "F"):
+            if isinstance(provided.get(grade), str) and provided[grade].strip():
+                verdicts[grade] = provided[grade]
+    base = PERSONAS["corporate"]
+    PERSONAS[key] = {
+        "label": str(data.get("label") or data["name"]),
+        "verdicts": verdicts,
+        "plan_intro": str(data.get("plan_intro") or base["plan_intro"]),
+        "signoff": str(data.get("signoff") or base["signoff"]),
+    }
+    return key
 
 
 def verdict_for(review: "Review") -> str:
@@ -1009,7 +1170,23 @@ def render_badge(review: Review) -> str:
 """
 
 
-def render_leaderboard(reviews: list[Review], repo_name: str) -> str:
+def pair_stats(commits_in: list[Commit], top: int = 3) -> list[tuple[str, str, int]]:
+    """Author pairs ranked by shared active days: who ships together."""
+    days: dict[str, set] = {}
+    for name, cs, _k in _author_groups(commits_in):
+        days[name] = {c.when.date() for c in cs}
+    pairs: list[tuple[str, str, int]] = []
+    names = sorted(days)
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            shared = len(days[a] & days[b])
+            if shared:
+                pairs.append((a, b, shared))
+    return sorted(pairs, key=lambda p: (-p[2], p[0], p[1]))[:top]
+
+
+def render_leaderboard(reviews: list[Review], repo_name: str,
+                       pairs: list[tuple[str, str, int]] | None = None) -> str:
     lines = ["", f"  PIP LEADERBOARD  -  {repo_name}", "  " + "-" * 62,
              f"  {'#':<3} {'Employee':<26} {'Grade':<6} {'Score':<7} {'Commits':<8} Top award"]
     for i, r in enumerate(reviews, 1):
@@ -1017,6 +1194,10 @@ def render_leaderboard(reviews: list[Review], repo_name: str) -> str:
         lines.append(f"  {i:<3} {r.author[:25]:<26} {r.overall_letter:<6} {r.overall_score:<7.1f} {r.total_commits:<8} {award}")
     lines.append("  " + "-" * 62)
     lines.append("  Ranked by overall PIP score. Ties broken by whoever panics less.")
+    if pairs:
+        a, b, shared = pairs[0]
+        lines.append(f"  Most in sync: {a} + {b}, {shared} shared active days. "
+                     "Management calls this collaboration. The calendar calls it evidence.")
     lines.append("")
     return "\n".join(lines)
 
@@ -1455,6 +1636,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--top", type=int, default=8, help="leaderboard size (default 8)")
     ap.add_argument("--outdir", metavar="DIR",
                     help="write every artifact (review, cards, badge, reference, JSON) into this directory")
+    ap.add_argument("--persona-file", metavar="JSON",
+                    help="load a custom persona pack from a JSON file (see personas/ in the repo)")
+    ap.add_argument("--org", metavar="GITHUB_USER",
+                    help="org mode: review the top author of a GitHub user's public repositories")
+    ap.add_argument("--org-limit", type=int, default=10,
+                    help="how many repositories --org reviews, most recently pushed first (default 10)")
+    ap.add_argument("--include-forks", action="store_true",
+                    help="with --org, include forked repositories")
     ap.add_argument("--history", action="store_true",
                     help="print this repo's grade history from your saved reviews, then exit")
     ap.add_argument("--coach", action="store_true",
@@ -1470,6 +1659,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="print the review as JSON instead of the summary")
     ap.add_argument("--version", action="version", version=f"on-a-pip {__version__}")
     args = ap.parse_args(argv)
+
+    if args.persona_file:
+        try:
+            args.persona = load_persona_file(args.persona_file)
+        except PipError as e:
+            print(f"on-a-pip: {e}", file=sys.stderr)
+            return 2
+    if args.org:
+        return _run_org(args)
 
     progress_key = args.repo
     repo_arg = args.repo
@@ -1576,10 +1774,14 @@ def main(argv: list[str] | None = None) -> int:
             if not board:
                 raise PipError("no author has enough commits to rank yet")
             repo_name = os.path.basename(repo) or repo
+            pairs = pair_stats(commits)
             if args.json:
-                print(json.dumps({"leaderboard": [review_to_json(r) for r in board]}, indent=2, default=str))
+                print(json.dumps({"leaderboard": [review_to_json(r) for r in board],
+                                  "pairs": [{"authors": [a, b], "shared_days": n}
+                                            for a, b, n in pairs]},
+                                 indent=2, default=str))
             else:
-                print(render_leaderboard(board, repo_name))
+                print(render_leaderboard(board, repo_name, pairs=pairs))
             return 0
         review = analyze(repo, commits, markers, args.author, date.today(),
                          file_totals=file_totals, persona=args.persona)

@@ -759,3 +759,82 @@ class V8FeaturesTest(unittest.TestCase):
         self.assertEqual(json.loads(out)["persona"], "brutal")
         rc, out = self._quiet_main([repo, "--json", "--persona", "corporate"])
         self.assertEqual(json.loads(out)["persona"], "corporate")
+
+
+class V9FeaturesTest(unittest.TestCase):
+    def test_builtin_pirate_persona(self):
+        ProfessionalDevTest.setUpClass()
+        review = review_of(ProfessionalDevTest.repo, persona="pirate")
+        md = pip_pip.render_markdown(review)
+        self.assertIn("Pirate Captain", md)
+
+    def test_persona_file_pack(self):
+        tmp = tempfile.mkdtemp()
+        pack = os.path.join(tmp, "coach.json")
+        with open(pack, "w") as f:
+            json.dump({"name": "Drill Sergeant", "label": "Drill Sergeant",
+                       "verdicts": {"A": "ACCEPTABLE. BARELY. DO IT AGAIN."}}, f)
+        key = pip_pip.load_persona_file(pack)
+        self.assertEqual(key, "drill-sergeant")
+        ProfessionalDevTest.setUpClass()
+        review = review_of(ProfessionalDevTest.repo, persona=key)
+        self.assertEqual(review.overall_letter, "A")
+        self.assertIn("ACCEPTABLE. BARELY.", pip_pip.verdict_for(review))
+        bad = os.path.join(tmp, "bad.json")
+        with open(bad, "w") as f:
+            f.write("{not json")
+        with self.assertRaises(pip_pip.PipError):
+            pip_pip.load_persona_file(bad)
+
+    def test_pair_stats_shared_days(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "pairs")
+        make_repo(repo)
+        commit(repo, at(10, 10), "alpha works day one with explanation", files={"a.py": "x\n"})
+        commit(repo, at(9, 10), "alpha works day two with explanation", append={"a.py": "y\n"})
+        commit(repo, at(10, 12), "beta joins on day one with explanation",
+               author="Beta Dev <beta@example.com>", files={"b.py": "x\n"})
+        commit(repo, at(8, 10), "beta works day three with explanation",
+               author="Beta Dev <beta@example.com>", append={"b.py": "y\n"})
+        commits = pip_pip.collect_commits(repo, 1000)
+        pairs = pip_pip.pair_stats(commits)
+        self.assertEqual(len(pairs), 1)
+        a, b, shared = pairs[0]
+        self.assertEqual({a, b}, {"Dev Example", "Beta Dev"})
+        self.assertEqual(shared, 1)
+
+    def test_fetch_org_repos_filters(self):
+        import io
+        import urllib.error
+        payload = json.dumps([
+            {"name": "one", "clone_url": "https://x/one.git", "fork": False, "archived": False},
+            {"name": "forked", "clone_url": "https://x/f.git", "fork": True, "archived": False},
+            {"name": "old", "clone_url": "https://x/o.git", "fork": False, "archived": True},
+            {"name": "two", "clone_url": "https://x/two.git", "fork": False, "archived": False},
+            {"name": "three", "clone_url": "https://x/three.git", "fork": False, "archived": False},
+        ]).encode()
+
+        def opener(req):
+            return io.BytesIO(payload)
+
+        repos = pip_pip.fetch_org_repos("someone", limit=2, _opener=opener)
+        self.assertEqual(repos, [("one", "https://x/one.git"), ("two", "https://x/two.git")])
+        repos = pip_pip.fetch_org_repos("someone", limit=10, include_forks=True, _opener=opener)
+        self.assertIn(("forked", "https://x/f.git"), repos)
+        self.assertNotIn(("old", "https://x/o.git"), repos)
+
+        def not_found(req):
+            raise urllib.error.HTTPError("https://api.github.com", 404, "Not Found", None, None)
+
+        with self.assertRaises(pip_pip.PipError):
+            pip_pip.fetch_org_repos("ghost", _opener=not_found)
+
+    def test_render_org_board(self):
+        MessyDevTest.setUpClass()
+        ProfessionalDevTest.setUpClass()
+        rows = [("messy", MessyDevTest.review),
+                ("tidy", review_of(ProfessionalDevTest.repo))]
+        rows.sort(key=lambda kv: -kv[1].overall_score)
+        text = pip_pip.render_org(rows, "someone")
+        self.assertIn("PIP ORG BOARD", text)
+        self.assertIn("Org MVP", text)

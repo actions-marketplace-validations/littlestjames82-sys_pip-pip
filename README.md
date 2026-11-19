@@ -92,6 +92,8 @@ on-a-pip --fail-below B           # exit code 3 if the grade is worse than B (a 
 on-a-pip --history                # your grade trend across every saved review of this repo
 on-a-pip --coach                  # coaching mode: a four-week drill plan instead of a verdict
 on-a-pip --blame app.py           # a performance review for one file: every commit that touched it
+on-a-pip --org psf                # org board: the top author of a GitHub user's public repos
+on-a-pip --persona-file noir.json # bring your own manager: a custom persona pack
 on-a-pip --leaderboard            # review every author in the repo and rank them
 on-a-pip psf/requests               # or skip the local part entirely: any public repo by URL
 on-a-pip --json                   # machine-readable review
@@ -114,6 +116,10 @@ on-a-pip --json                   # machine-readable review
 - **File reviews** (`--blame`): one file, every commit that ever touched it, formally reviewed.
 - **Repo config:** a `.pip.toml` in the repo root can set `persona` and `fail_below` once for the whole team; the command line still wins.
 - 21 awards now, including The Archaeologist (revives files untouched for a year), Merge Goblin, Lone Wolf, and Rubber Duck (commit bodies longer than some READMEs).
+- **Org boards** (`--org`): point PIP at any GitHub user and get one ranked board across their public repos, with an Org MVP.
+- **Pair stats:** the leaderboard now names the pair most in sync, ranked by shared active days.
+- **Persona packs:** six managers built in (Corporate, Startup CTO, Supportive Lead, Passive-Aggressive Middle Manager, Pirate Captain, Noir Detective), and `--persona-file` loads your own from a small JSON pack. Two sample packs live in `personas/`.
+- A scheduled monthly profile-review Action example lives in `examples/`.
 
 ## The gallery
 
@@ -177,7 +183,7 @@ MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).
 
 ![PIP report card](pip-card.svg)
 
-**Grade: B (77/100)** · 17 commits reviewed · Top award: Night Owl · Reviewed 2026-11-19
+**Grade: B (81/100)** · 9 commits reviewed · Top award: Polyglot · Reviewed 2026-11-18
 
 *This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) (`on-a-pip --readme`). The record speaks for itself.*
 <!-- pip:end -->
