@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -525,6 +525,16 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
         busiest_day, busiest_count = max(day_counts.items(), key=lambda kv: kv[1])
     month_counts = Counter(c.when.strftime("%Y-%m") for c in commits)
     months_sorted = sorted(month_counts.items())
+    # --- hall of fame: the novel, the haiku, the catchphrase --------------
+    longest_subject = max(subjects, key=len) if subjects else ""
+    shortest_subject = min(subjects, key=len) if subjects else ""
+    STOPWORDS = {"with", "from", "this", "that", "when", "into", "over",
+                 "after", "before", "will", "adds", "added", "using", "used"}
+    word_counts = Counter(w for w in re.findall(r"[a-z]{4,}", " ".join(subjects).lower())
+                          if w not in STOPWORDS)
+    top_word, top_word_count = ("", 0)
+    if word_counts:
+        top_word, top_word_count = word_counts.most_common(1)[0]
     LANG_NAMES = {"py": "Python", "js": "JavaScript", "ts": "TypeScript", "tsx": "TypeScript",
                   "jsx": "JavaScript", "rs": "Rust", "go": "Go", "java": "Java", "c": "C",
                   "h": "C", "cpp": "C++", "rb": "Ruby", "php": "PHP", "html": "HTML",
@@ -568,6 +578,9 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
         "months": [[m, n] for m, n in months_sorted],
         "languages": [[name, churn] for name, churn in languages[:6]],
         "max_deleted_single": max_deleted_single,
+        "longest_subject": longest_subject,
+        "shortest_subject": shortest_subject,
+        "top_word": top_word, "top_word_count": top_word_count,
     }
 
     # --- awards: the part people actually post --------------------------
@@ -785,6 +798,12 @@ def render_markdown(review: Review) -> str:
     if h.get("languages"):
         langs = ", ".join(f"{name} ({int(churn):,} lines of churn)" for name, churn in h["languages"][:4])
         out.append(f"- **Languages by churn:** {langs}.")
+    if h.get("longest_subject"):
+        out.append(f"- **Longest commit message:** \"{h['longest_subject']}\" ({len(str(h['longest_subject']))} characters. A novel.)")
+    if h.get("shortest_subject"):
+        out.append(f"- **Shortest commit message:** \"{h['shortest_subject']}\". A haiku, if you squint.")
+    if h.get("top_word"):
+        out.append(f"- **Catchphrase:** \"{h['top_word']}\", appearing {h['top_word_count']} times across your commit subjects.")
     out.append(f"- **Net lines:** {int(h['added']):,} added, {int(h['deleted']):,} deleted.")
     if int(h.get("swears", 0)) > 0:
         out.append(f"- **Language:** {h['swears']} commit messages contain profanity. The record reflects the journey.")
@@ -847,6 +866,20 @@ def render_svg(review: Review) -> str:
         awards = (f'<text x="36" y="{y + 6}" font-size="12" fill="#333">'
                   f'Awards: {html.escape(titles)}</text>')
         y += 22
+    bars = ""
+    months = review.highlights.get("months") or []
+    if months:
+        recent = months[-24:]
+        top_n = max(n for _m, n in recent) or 1
+        bw = 608 / len(recent)
+        parts = []
+        for i, (_m, n) in enumerate(recent):
+            bh = max(2.0, n / top_n * 34)
+            parts.append(f'<rect x="{36 + i * bw + 1:.1f}" y="{y + 40 - bh:.1f}" '
+                         f'width="{bw - 2:.1f}" height="{bh:.1f}" fill="#8a6d1d"/>')
+        bars = (f'<text x="36" y="{y + 12}" font-size="11" fill="#777">Commits per month</text>'
+                + "".join(parts))
+        y += 48
     height = y + 34
     overall_color = GRADE_COLORS[review.overall_letter]
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="680" height="{height}" viewBox="0 0 680 {height}" role="img" aria-label="PIP report card for {html.escape(review.author)}">
@@ -858,8 +891,73 @@ def render_svg(review: Review) -> str:
   <text x="128" y="112" font-family="Georgia, serif" font-size="14" font-style="italic" fill="#333">{html.escape(verdict_for(review))}</text>
   <text x="128" y="134" font-family="Georgia, serif" font-size="12" fill="#777">Overall score: {review.overall_score:.0f}/100</text>
   <line x1="36" y1="160" x2="644" y2="160" stroke="#222" stroke-width="1"/>
-{rows}{awards}
+{rows}{awards}{bars}
   <text x="340" y="{height - 14}" font-family="Georgia, serif" font-size="11" fill="#777" text-anchor="middle">Generated locally by PIP from the employee's own git history. pip install on-a-pip</text>
+</svg>
+"""
+
+
+def render_wrapped(review: Review, year: int) -> str:
+    import calendar as _cal
+    months = review.highlights.get("months") or []
+    busiest_month = ""
+    if months:
+        label, _n = max(months, key=lambda kv: kv[1])
+        busiest_month = f"{_cal.month_name[int(label.split('-')[1])]} ({_n} commits)"
+    award = review.awards[0][0] if review.awards else "None. A quiet year."
+    lines = ["",
+             f"  YOUR {year} IN COMMITS  -  {review.author}",
+             f"  {review.repo_name}  |  the Wrapped edition",
+             "  " + "=" * 62,
+             f"  Commits:          {review.total_commits}",
+             f"  Grade:            {review.overall_letter} ({review.overall_score:.0f}/100)",
+             f"  Busiest month:    {busiest_month or 'n/a'}",
+             f"  Busiest day:      {review.highlights.get('busiest_day')} "
+             f"({review.highlights.get('busiest_day_count')} commits)",
+             f"  Top award:        {award}",
+             f"  Catchphrase:      \"{review.highlights.get('top_word') or 'n/a'}\"",
+             f"  Lines:            {int(review.highlights.get('added', 0)):,} written, "
+             f"{int(review.highlights.get('deleted', 0)):,} deleted",
+             "  " + "=" * 62,
+             f"  {verdict_for(review)}",
+             "  Same time next year. Management will bring the spreadsheet.",
+             ""]
+    return "\n".join(lines)
+
+
+def render_wrapped_svg(review: Review, year: int) -> str:
+    import calendar as _cal
+    months = review.highlights.get("months") or []
+    busiest_month = "n/a"
+    if months:
+        label, _n = max(months, key=lambda kv: kv[1])
+        busiest_month = _cal.month_name[int(label.split("-")[1])]
+    award = review.awards[0][0] if review.awards else "None"
+    color = GRADE_COLORS[review.overall_letter]
+    bars = ""
+    if months:
+        recent = months[-12:]
+        top_n = max(n for _m, n in recent) or 1
+        bw = 608 / len(recent)
+        parts = []
+        for i, (_m, n) in enumerate(recent):
+            bh = max(2.0, n / top_n * 60)
+            parts.append(f'<rect x="{36 + i * bw + 1:.1f}" y="{330 - bh:.1f}" width="{bw - 2:.1f}" '
+                         f'height="{bh:.1f}" fill="#e8b93c"/>')
+        bars = "".join(parts)
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="680" height="400" viewBox="0 0 680 400" role="img" aria-label="{year} in commits for {html.escape(review.author)}">
+  <rect x="3" y="3" width="674" height="394" fill="#191919" stroke="#e8b93c" stroke-width="3"/>
+  <text x="36" y="58" font-family="Georgia, serif" font-size="30" letter-spacing="3" fill="#e8b93c">YOUR {year} IN COMMITS</text>
+  <text x="36" y="84" font-family="Georgia, serif" font-size="14" fill="#ccc">{html.escape(review.author)} | {html.escape(review.repo_name)}</text>
+  <rect x="36" y="104" width="86" height="68" rx="8" fill="{color}"/>
+  <text x="79" y="154" font-family="Georgia, serif" font-size="48" font-weight="bold" fill="#fff" text-anchor="middle">{review.overall_letter}</text>
+  <text x="140" y="128" font-family="Georgia, serif" font-size="17" fill="#fff">{review.total_commits} commits</text>
+  <text x="140" y="152" font-family="Georgia, serif" font-size="14" fill="#bbb">Busiest month: {busiest_month}</text>
+  <text x="36" y="206" font-family="Georgia, serif" font-size="15" fill="#fff">Top award: {html.escape(award)}</text>
+  <text x="36" y="232" font-family="Georgia, serif" font-size="15" fill="#fff">Catchphrase: "{html.escape(str(review.highlights.get('top_word') or 'n/a'))}"</text>
+  <text x="36" y="258" font-family="Georgia, serif" font-size="13" font-style="italic" fill="#999">{html.escape(verdict_for(review))}</text>
+{bars}
+  <text x="340" y="386" font-family="Georgia, serif" font-size="11" fill="#888" text-anchor="middle">PIP Wrapped. Generated locally from git history. pip install on-a-pip</text>
 </svg>
 """
 
@@ -1193,6 +1291,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="treat the target as a folder of repositories and review the top author of each")
     ap.add_argument("--quarter", action="store_true",
                     help="quarterly ritual mode: review the last 90 days and compare with your last review")
+    ap.add_argument("--year", type=int, metavar="YYYY",
+                    help="Wrapped mode: review one calendar year and print the year-in-commits edition")
+    ap.add_argument("--top", type=int, default=8, help="leaderboard size (default 8)")
+    ap.add_argument("--outdir", metavar="DIR",
+                    help="write every artifact (review, cards, badge, reference, JSON) into this directory")
+    ap.add_argument("--fail-below", choices=["A", "B", "C", "D", "F"], metavar="GRADE",
+                    help="exit with code 3 if the overall grade is worse than GRADE (for CI gates, serious or otherwise)")
     ap.add_argument("--md", metavar="FILE", help="write the full review as Markdown")
     ap.add_argument("--html", metavar="FILE", help="write the shareable report card as HTML")
     ap.add_argument("--svg", metavar="FILE", help="write the shareable report card as SVG (embeds in READMEs)")
@@ -1227,6 +1332,9 @@ def main(argv: list[str] | None = None) -> int:
         progress_key = repo
     if args.quarter and args.days is None and not (args.since or args.until):
         args.days = 90
+    if args.year and not (args.since or args.until):
+        args.since = f"{args.year}-01-01"
+        args.until = f"{args.year}-12-31"
     if args.scan:
         if not os.path.isdir(repo):
             print(f"on-a-pip: {args.repo} is not a directory to scan", file=sys.stderr)
@@ -1280,7 +1388,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.leaderboard:
             board = leaderboard(repo, commits, markers, date.today(),
-                                file_totals=file_totals, persona=args.persona)
+                                file_totals=file_totals, persona=args.persona, top=args.top)
             if not board:
                 raise PipError("no author has enough commits to rank yet")
             repo_name = os.path.basename(repo) or repo
@@ -1301,6 +1409,8 @@ def main(argv: list[str] | None = None) -> int:
     previous = load_previous(progress_key)
     if args.json:
         print(json.dumps(review_to_json(review), indent=2, default=str))
+    elif args.year:
+        print(render_wrapped(review, args.year))
     else:
         print(render_terminal(review, previous=previous))
     save_current(progress_key, review)
@@ -1314,8 +1424,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Report card written to {args.html}")
     if args.svg:
         with open(args.svg, "w", encoding="utf-8") as f:
-            f.write(render_svg(review))
+            f.write(render_wrapped_svg(review, args.year) if args.year else render_svg(review))
         print(f"SVG report card written to {args.svg}")
+    if args.outdir:
+        os.makedirs(args.outdir, exist_ok=True)
+        artifacts = {
+            "review.md": render_markdown(review),
+            "report-card.html": render_html(review),
+            "report-card.svg": render_wrapped_svg(review, args.year) if args.year else render_svg(review),
+            "badge.svg": render_badge(review),
+            "reference.md": render_reference(review),
+            "review.json": json.dumps(review_to_json(review), indent=2, default=str),
+        }
+        for fname, content in artifacts.items():
+            with open(os.path.join(args.outdir, fname), "w", encoding="utf-8") as f:
+                f.write(content)
+        print(f"All artifacts written to {args.outdir}")
     if args.badge:
         with open(args.badge, "w", encoding="utf-8") as f:
             f.write(render_badge(review))
@@ -1338,6 +1462,12 @@ def main(argv: list[str] | None = None) -> int:
     if review.total_commits < 10:
         print("Note: fewer than 10 commits reviewed. Management is extrapolating, "
               "the way management does.", file=sys.stderr)
+    if args.fail_below:
+        rank = {"A": 5, "B": 4, "C": 3, "D": 2, "F": 1}
+        if rank[review.overall_letter] < rank[args.fail_below]:
+            print(f"on-a-pip: grade {review.overall_letter} is below the required "
+                  f"{args.fail_below}. The gate has spoken.", file=sys.stderr)
+            return 3
     return 0
 
 

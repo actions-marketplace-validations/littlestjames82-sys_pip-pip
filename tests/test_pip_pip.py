@@ -536,3 +536,77 @@ class V6FeaturesTest(unittest.TestCase):
         review = review_of(repo)
         self.assertEqual(review.author, "Canon Name")
         self.assertEqual(review.total_commits, 4)
+
+
+class V7FeaturesTest(unittest.TestCase):
+    def test_hall_of_fame(self):
+        MessyDevTest.setUpClass()
+        review = MessyDevTest.review
+        self.assertEqual(review.highlights["longest_subject"],
+                         "implement user settings page with validation and tests")
+        # "wip" and "fix" tie at 3 chars; ties resolve to the earliest commit.
+        self.assertEqual(review.highlights["shortest_subject"], "wip")
+
+    def test_catchphrase(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "catchy")
+        make_repo(repo)
+        for i, noun in enumerate(["parser", "loader", "writer"]):
+            commit(repo, at(20 - i * 5, 10), f"refactor the {noun} module",
+                   files={"m.py": f"# {noun}\n"} if i == 0 else None,
+                   append={"m.py": f"# more {noun}\n"} if i > 0 else None)
+        review = review_of(repo)
+        self.assertEqual(review.highlights["top_word"], "refactor")
+        self.assertEqual(review.highlights["top_word_count"], 3)
+
+    def test_svg_has_month_bars(self):
+        MessyDevTest.setUpClass()
+        svg = pip_pip.render_svg(MessyDevTest.review)
+        self.assertIn("Commits per month", svg)
+
+    def _quiet_main(self, argv):
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()):
+            return pip_pip.main(argv)
+
+    def test_year_mode_filters(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "years")
+        make_repo(repo)
+        commit(repo, at(500, 12), "an old explained change from long ago", files={"a.py": "x\n"})
+        commit(repo, at(10, 12), "a recent explained change for the team", append={"a.py": "y\n"})
+        old_year = (date.today() - timedelta(days=500)).year
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = pip_pip.main([repo, "--year", str(old_year), "--json"])
+        self.assertEqual(rc, 0)
+        data = json.loads(buf.getvalue())
+        self.assertEqual(data["total_commits"], 1)
+
+    def test_wrapped_renders(self):
+        ProfessionalDevTest.setUpClass()
+        review = review_of(ProfessionalDevTest.repo)
+        text = pip_pip.render_wrapped(review, 2026)
+        self.assertIn("YOUR 2026 IN COMMITS", text)
+        svg = pip_pip.render_wrapped_svg(review, 2026)
+        self.assertIn("YOUR 2026 IN COMMITS", svg)
+
+    def test_fail_below_gate(self):
+        MessyDevTest.setUpClass()
+        repo = MessyDevTest.repo
+        self.assertEqual(MessyDevTest.review.overall_letter, "C")
+        self.assertEqual(self._quiet_main([repo, "--fail-below", "B"]), 3)
+        self.assertEqual(self._quiet_main([repo, "--fail-below", "D"]), 0)
+
+    def test_outdir_writes_everything(self):
+        tmp = tempfile.mkdtemp()
+        ProfessionalDevTest.setUpClass()
+        repo = ProfessionalDevTest.repo
+        outdir = os.path.join(tmp, "artifacts")
+        self.assertEqual(self._quiet_main([repo, "--outdir", outdir]), 0)
+        for fname in ("review.md", "report-card.html", "report-card.svg",
+                      "badge.svg", "reference.md", "review.json"):
+            self.assertTrue(os.path.exists(os.path.join(outdir, fname)), fname)
