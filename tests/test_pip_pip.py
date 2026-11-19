@@ -67,14 +67,15 @@ def friday_at(days_ago, hour):
     return datetime.combine(d, time(hour, 30), tzinfo=UTC)
 
 
-def review_of(repo):
+def review_of(repo, **kw):
     commits = pip_pip.collect_commits(repo, 10000)
-    stats = pip_pip.collect_numstat(repo, {c.sha for c in commits})
+    stats, file_totals = pip_pip.collect_numstat(repo, {c.sha for c in commits})
     for c in commits:
         if c.sha in stats:
             c.added, c.deleted, c.files = stats[c.sha]
     markers = pip_pip.collect_markers(repo)
-    return pip_pip.analyze(repo, commits, markers, None, date.today())
+    return pip_pip.analyze(repo, commits, markers, None, date.today(),
+                            file_totals=file_totals, **kw)
 
 
 class MessyDevTest(unittest.TestCase):
@@ -175,3 +176,79 @@ class CliTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class V2FeaturesTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.repo = os.path.join(cls.tmp, "v2")
+        make_repo(cls.repo)
+        # Dev Example: messy habits (same shape as MessyDevTest)
+        commit(cls.repo, at(400, 10), "initial commit with project scaffold and readme",
+               files={"app.py": "# TODO: refactor this someday\nprint('v1')\n"})
+        commit(cls.repo, at(300, 23, 30), "stuff", append={"app.py": "print('more')\n"})
+        commit(cls.repo, at(299, 1, 15), "wip", append={"app.py": "print('even more')\n"})
+        commit(cls.repo, at(50, 9), "asdf", append={"app.py": "print('x')\n"})
+        commit(cls.repo, at(280, 23, 45), "hmm", append={"app.py": "print('late')\n"})
+        commit(cls.repo, at(270, 10), "tweaks", append={"app.py": "print('t')\n"})
+        commit(cls.repo, at(260, 12), "more stuff", append={"app.py": "print('ms')\n"})
+        commit(cls.repo, at(250, 14), "checkpoint", append={"app.py": "print('c')\n"})
+        commit(cls.repo, at(240, 16), "updates", append={"app.py": "print('u')\n"})
+        commit(cls.repo, at(10, 15), "implement user settings page with validation and tests",
+               body="Adds the settings form, server validation, and tests.",
+               append={"app.py": "print('settings')\n"})
+        # Second author: tidy, daytime, explained
+        for i, subject in enumerate([
+                "add billing export to csv with tests",
+                "document the on-call rotation and escalation",
+                "refactor session cache into its own module"]):
+            commit(cls.repo, at(30 - i * 5, 11), subject,
+                   body="Context and reasoning for the next reader.",
+                   author="Tidy Example",
+                   files={f"tidy{i}.py": f"# tidy {i}\n"} if i == 0 else None,
+                   append={"tidy0.py": f"# more {i}\n"} if i > 0 else None)
+        cls.review = review_of(cls.repo)
+
+    def test_awards_and_nemesis(self):
+        titles = [t for t, _ in self.review.awards]
+        self.assertIn("Night Owl", titles)          # 2 of 5 commits at night = 40%
+        self.assertIn("Fossil Keeper", titles)      # TODO is 400 days old
+        self.assertEqual(self.review.highlights["nemesis_file"], "app.py")
+        self.assertGreater(self.review.highlights["nemesis_churn"], 0)
+
+    def test_svg_and_badge(self):
+        svg = pip_pip.render_svg(self.review)
+        self.assertIn("<svg", svg)
+        self.assertIn("PERFORMANCE IMPROVEMENT PLAN", svg)
+        self.assertIn(self.review.overall_letter, svg)
+        badge = pip_pip.render_badge(self.review)
+        self.assertIn("my PIP grade", badge)
+
+    def test_personas_change_the_verdict_not_the_facts(self):
+        brutal = review_of(self.repo, persona="brutal")
+        self.assertEqual(brutal.categories[0].score, self.review.categories[0].score)
+        self.assertNotEqual(pip_pip.verdict_for(brutal), pip_pip.verdict_for(self.review))
+        md = pip_pip.render_markdown(brutal)
+        self.assertIn("Startup CTO", md)
+
+    def test_scope_commits_known_answer(self):
+        commits = pip_pip.collect_commits(self.repo, 10000)
+        scoped = pip_pip.scope_commits(commits, 30)
+        # anchor is the newest commit (10 days ago); within 30 days of it:
+        # the 10-day and 30/25/20-day commits survive, the rest do not.
+        self.assertEqual(len(scoped), 4)
+
+    def test_leaderboard_ranks_both_authors(self):
+        commits = pip_pip.collect_commits(self.repo, 10000)
+        stats, file_totals = pip_pip.collect_numstat(self.repo, {c.sha for c in commits})
+        for c in commits:
+            if c.sha in stats:
+                c.added, c.deleted, c.files = stats[c.sha]
+        markers = pip_pip.collect_markers(self.repo)
+        board = pip_pip.leaderboard(self.repo, commits, markers, date.today(),
+                                    file_totals=file_totals, min_commits=3)
+        self.assertEqual(len(board), 2)
+        self.assertEqual(board[0].author, "Tidy Example")
+        text = pip_pip.render_leaderboard(board, "v2")
+        self.assertIn("LEADERBOARD", text)

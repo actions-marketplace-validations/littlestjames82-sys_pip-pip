@@ -40,19 +40,46 @@ on-a-pip
 
 Then it does what any good PIP does: it writes you a **30-day improvement plan**, generated from your three weakest categories, and signs off with the only appeal process that has ever worked: improve the record.
 
-## Outputs
+## Awards
+
+Grades are the paperwork. Awards are the part people post. PIP reads your habits and hands out titles, each one earned by the record:
+
+- **Night Owl** - a quarter or more of your commits land between 10pm and 5am
+- **Friday Gambler** - repeated Friday-after-4pm shipping
+- **Demolitionist** - you delete more than you add, at scale
+- **The Ghost** - a 60+ day disappearance, then a casual return
+- **Fossil Keeper** - a TODO old enough to qualify for the pension plan
+- **Surgeon**, **Streak Keeper**, **Open Book**, **Strong Silent Type**, **Chaos Agent**, **Weekend Warrior**, **Colourful Commentator**
+
+It also names your **nemesis file** (the one with the most churn in your history) and your largest single commit, because management did the reading.
+
+## Choose your manager
 
 ```
-on-a-pip ~/some/repo --md review.md --html card.html
+on-a-pip --persona brutal       # the startup CTO
+on-a-pip --persona supportive   # the kind lead
+on-a-pip --persona passive      # the passive-aggressive middle manager
+on-a-pip --persona corporate    # the default. HR is present.
+```
+
+The evidence never changes. The tone absolutely does.
+
+## More ways to be reviewed
+
+```
+on-a-pip ~/some/repo --md review.md --html card.html --svg card.svg --badge badge.svg
 on-a-pip --author "your name"     # review one author (default: the most prolific)
+on-a-pip --days 90                # just the last 90 days of history
+on-a-pip --leaderboard            # review every author in the repo and rank them
 on-a-pip --json                   # machine-readable review
 ```
 
-- The terminal summary above.
-- A full formal review in Markdown: per-category evidence, management notes, the plan, the sign-off.
-- A shareable **report card** in HTML (see `examples/`), made for posting. Every card is different, because every history is different.
+- The terminal summary above, now with awards, and a progress line comparing you to your last review (PIP remembers, locally).
+- A full formal review in Markdown: per-category evidence, management notes, additional findings, awards, the plan, the sign-off.
+- Shareable **report cards** in HTML and **SVG** (the SVG embeds straight into a README), plus a small **grade badge** for your profile.
+- A **leaderboard mode** for shared repos. Run it on your team. We accept no responsibility for the standup that follows.
 
-Sample outputs live in [`examples/`](examples/): a full sample review, a sample report card, and a real report card generated from the Decksmith repository.
+Sample outputs live in [`examples/`](examples/): a full sample review, sample report cards, a badge, and a real report card generated from the Decksmith repository.
 
 ## Private by construction
 

@@ -10,6 +10,7 @@
 ## Overall assessment: C (62/100)
 
 *Meets some expectations. There is a conversation to be had.*
+*Review style: Corporate*
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
@@ -52,6 +53,18 @@ This review is based entirely on the employee's own git history, the work diary 
 - Average output on an active day: 1.0 commits.
 
 **Management notes:** Bursts followed by silence are harder on a project than a steady pace. Showing up regularly is most of the job, and it is the part nobody can automate.
+
+## Additional findings
+
+- **Nemesis file:** app.py - 10 lines of churn across the review period. You two have history.
+- **Largest single commit:** 2 lines changed in "initial commit with project scaffold and readme". A bold unit of work.
+- **Weekend work:** 1 of 8 commits landed on a Saturday or Sunday.
+- **Net lines:** 10 added, 0 deleted.
+
+## Awards
+
+- **The Ghost:** Vanished for 99 days once, then returned as if nothing happened. It had, in fact, happened.
+- **Fossil Keeper:** A TODO has survived 400 days in the code. It qualifies for the pension plan.
 
 ## 30-day improvement plan
 

@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -95,10 +95,16 @@ def collect_commits(repo: str, max_commits: int) -> list[Commit]:
     return commits
 
 
-def collect_numstat(repo: str, shas: set[str], cap: int = 5000) -> dict[str, tuple[int, int, int]]:
-    """Map sha -> (added, deleted, files). Capped for very large histories."""
+def collect_numstat(repo: str, shas: set[str], cap: int = 5000):
+    """Return (per-commit stats, per-file totals).
+
+    Per-commit: sha -> (added, deleted, files).
+    Per-file: path -> (added, deleted, commits_touched).
+    Capped for very large histories.
+    """
     out = _git(repo, ["log", f"--max-count={cap}", "--numstat", "--format=%H"])
     stats: dict[str, tuple[int, int, int]] = {}
+    files: dict[str, tuple[int, int, int]] = {}
     current: str | None = None
     for line in out.splitlines():
         line = line.strip()
@@ -118,7 +124,12 @@ def collect_numstat(repo: str, shas: set[str], cap: int = 5000) -> dict[str, tup
             deleted = int(d) if d.isdigit() else 0
             pa, pd, pf = stats[current]
             stats[current] = (pa + added, pd + deleted, pf + 1)
-    return stats
+            fname = parts[2]
+            if " => " in fname:
+                fname = fname.split(" => ")[-1].strip("{}")
+            fa, fd, fc = files.get(fname, (0, 0, 0))
+            files[fname] = (fa + added, fd + deleted, fc + 1)
+    return stats, files
 
 
 MARKER_RE = re.compile(r"\b(TODO|FIXME|HACK|XXX|TEMPORARY|TEMP|WORKAROUND)\b[:\s]?(.*)", re.IGNORECASE)
@@ -219,6 +230,8 @@ class Review:
     total_commits: int
     categories: list[Category]
     highlights: dict[str, object]
+    awards: list[tuple[str, str]] = field(default_factory=list)
+    persona: str = "corporate"
 
     @property
     def overall_score(self) -> float:
@@ -237,9 +250,78 @@ VERDICTS = {
     "F": "Does not yet meet expectations. The plan below is not optional.",
 }
 
+PERSONAS: dict[str, dict[str, object]] = {
+    "corporate": {
+        "label": "Corporate",
+        "verdicts": VERDICTS,
+        "plan_intro": "The following actions address the lowest-scoring areas. "
+                      "Progress will be assessed by re-running this review, which is to say, "
+                      "by the record itself.",
+        "signoff": "By continuing to commit, the employee acknowledges receipt of this plan. "
+                   "Appeals may be filed by improving the record.",
+    },
+    "brutal": {
+        "label": "Startup CTO",
+        "verdicts": {
+            "A": "Fine. Genuinely fine. Do not let it go to your head.",
+            "B": "Good. Not great. You know the difference, which is the good part.",
+            "C": "This is the part where a nicer manager would lie to you.",
+            "D": "I have seen interns. I have seen scripts. I have seen this before, from both.",
+            "F": "We are not doing a feelings meeting. We are doing this plan.",
+        },
+        "plan_intro": "No workshops. No journaling. Fix these, in this order, starting today.",
+        "signoff": "Acknowledged or not, the record keeps receipts. So do I.",
+    },
+    "supportive": {
+        "label": "Supportive Lead",
+        "verdicts": {
+            "A": "Wonderful work. Truly. Let us make sure everyone sees it.",
+            "B": "Strong, steady work with real bright spots. Proud of this trajectory.",
+            "C": "There is a good developer in this record, and some habits worth untangling together.",
+            "D": "A rough stretch is not a verdict on you. It is a map of where support goes first.",
+            "F": "We start where we are, and where we are is: lots of room, and a plan that fits in 30 days.",
+        },
+        "plan_intro": "Small, kind, concrete steps, aimed at the areas with the most room to grow. "
+                      "None of this requires becoming a different person.",
+        "signoff": "Thank you for the work in this record, including the messy parts. Especially those.",
+    },
+    "passive": {
+        "label": "Passive-Aggressive Middle Manager",
+        "verdicts": {
+            "A": "Great. So we CAN do it. Interesting. Noted for the other 51 weeks.",
+            "B": "Lovely. Mostly. We will circle back on the rest, per my last several reviews.",
+            "C": "Per my last email, and the one before that, and the one before that.",
+            "D": "No rush. It is only the roadmap. And the release. And the team blocked on you.",
+            "F": "Wow. Okay. Lots to discuss. I have cleared my calendar. And yours.",
+        },
+        "plan_intro": "Just a few tiny suggestions. Again. For the third time. With feeling.",
+        "signoff": "No need to reply. Your commit history already did.",
+    },
+}
+
+
+def verdict_for(review: "Review") -> str:
+    persona = PERSONAS.get(review.persona, PERSONAS["corporate"])
+    return persona["verdicts"][review.overall_letter]  # type: ignore[index]
+
+
+SWEAR_RE = re.compile(r"\b(damn|hell|shit|fuck|fucking|crap|wtf|bullshit)\b", re.IGNORECASE)
+
+
+def scope_commits(commits: list[Commit], days: int | None) -> list[Commit]:
+    """Keep only commits within `days` of the most recent commit (the anchor),
+    so old repositories can be reviewed for a recent period."""
+    if not days or not commits:
+        return commits
+    anchor = max(c.when for c in commits)
+    cutoff = anchor - timedelta(days=days)
+    return [c for c in commits if c.when >= cutoff]
+
 
 def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
-            author_filter: str | None, today: date) -> Review:
+            author_filter: str | None, today: date,
+            file_totals: dict[str, tuple[int, int, int]] | None = None,
+            persona: str = "corporate") -> Review:
     # Pick the employee: explicit filter, else the most prolific author.
     by_author: dict[str, list[Commit]] = {}
     for c in commits_in:
@@ -357,6 +439,22 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
     con.concern = "Bursts followed by silence are harder on a project than a steady pace."
     con.praise = "Showing up regularly is most of the job, and it is the part nobody can automate."
 
+    # --- extra colour: weekends, merges, language, nemesis, biggest day ---
+    weekend = [c for c in commits if c.when.weekday() >= 5]
+    merges = [c for c in commits if c.subject.startswith("Merge ")]
+    swears = [c for c in commits if SWEAR_RE.search(c.subject) or SWEAR_RE.search(c.body)]
+    sorries = [c for c in commits if "sorry" in (c.subject + " " + c.body).lower()]
+    total_added = sum(c.added for c in commits)
+    total_deleted = sum(c.deleted for c in commits)
+    biggest = max(commits, key=lambda c: c.added + c.deleted) if commits else None
+    nemesis = None
+    nemesis_churn = 0
+    if file_totals:
+        author_files = file_totals  # totals are repo-wide; the reviewed author dominates them in practice
+        if author_files:
+            nemesis, (na, nd, _nc) = max(author_files.items(), key=lambda kv: kv[1][0] + kv[1][1])
+            nemesis_churn = na + nd
+
     highlights: dict[str, object] = {
         "night_commits": len(night), "friday_late": len(friday_late),
         "reverts": len(reverts), "fixes": len(fixes), "vague": len(vague),
@@ -364,8 +462,41 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
         "temps": len(temps), "oldest_temp_days": oldest_temp_days,
         "active_days": len(active_days), "span_days": span_days,
         "longest_streak": longest, "longest_gap": longest_gap,
-        "added": sum(c.added for c in commits), "deleted": sum(c.deleted for c in commits),
+        "added": total_added, "deleted": total_deleted,
+        "weekend_commits": len(weekend), "merges": len(merges),
+        "swears": len(swears), "sorries": len(sorries),
+        "nemesis_file": nemesis, "nemesis_churn": nemesis_churn,
+        "biggest_commit_lines": (biggest.added + biggest.deleted) if biggest else 0,
+        "biggest_commit_subject": biggest.subject if biggest else "",
     }
+
+    # --- awards: the part people actually post --------------------------
+    awards: list[tuple[str, str]] = []
+    if total >= 10 and night_ratio >= 0.25:
+        awards.append(("Night Owl", f"{night_ratio:.0%} of all commits landed between 10pm and 5am. The codebase's second shift."))
+    if len(friday_late) >= 3:
+        awards.append(("Friday Gambler", f"{len(friday_late)} commits shipped on a Friday at or after 4pm. Courage, or something adjacent to it."))
+    if total_deleted > total_added and total_deleted >= 500:
+        awards.append(("Demolitionist", f"Deleted {total_deleted:,} lines against {total_added:,} added. The bravest key on the keyboard is Delete."))
+    if total >= 20 and sum(c.files for c in commits) / total <= 1.5:
+        awards.append(("Surgeon", "Small, precise commits, one concern at a time. Future archaeologists send their thanks."))
+    if longest_gap >= 60:
+        awards.append(("The Ghost", f"Vanished for {longest_gap} days once, then returned as if nothing happened. It had, in fact, happened."))
+    if longest >= 7:
+        awards.append(("Streak Keeper", f"{longest} active days in a row at the longest stretch. Showing up is a skill."))
+    if body_ratio >= 0.5 and total >= 10:
+        awards.append(("Open Book", f"{body_ratio:.0%} of commits carry a real explanation. Reviewers wept, briefly, with joy."))
+    if avg_len < 12 and total >= 10:
+        awards.append(("Strong Silent Type", f"Average commit message: {avg_len:.0f} characters. The code speaks. Nobody knows what it said."))
+    if revert_ratio >= 0.05 and total >= 10:
+        awards.append(("Chaos Agent", f"{revert_ratio:.0%} of commits undo earlier commits. A one-person arms race."))
+    if oldest_todo_days is not None and oldest_todo_days >= 365:
+        awards.append(("Fossil Keeper", f"A TODO has survived {oldest_todo_days} days in the code. It qualifies for the pension plan."))
+    if len(swears) >= 3:
+        awards.append(("Colourful Commentator", f"{len(swears)} commit messages contain profanity. Honest, if not exactly handbook language."))
+    if len(weekend) / total >= 0.3 and total >= 10:
+        awards.append(("Weekend Warrior", f"{len(weekend) / total:.0%} of commits landed on a Saturday or Sunday. The roadmap thanks you. The weekend does not."))
+
     return Review(
         repo_name=os.path.basename(os.path.abspath(repo)) or repo,
         author=author, review_date=today,
@@ -373,7 +504,29 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
         total_commits=total,
         categories=[comm, rel, ft, jud, con],
         highlights=highlights,
+        awards=awards,
+        persona=persona,
     )
+
+
+def leaderboard(repo: str, commits_in: list[Commit], markers: list[Marker],
+                today: date, file_totals=None, persona: str = "corporate",
+                min_commits: int = 5, top: int = 8) -> list[Review]:
+    """Review every author in the repo and rank them. The office feature."""
+    authors: dict[str, int] = {}
+    for c in commits_in:
+        authors[c.author] = authors.get(c.author, 0) + 1
+    ranked = sorted(authors.items(), key=lambda kv: -kv[1])
+    reviews: list[Review] = []
+    for name, count in ranked[:top]:
+        if count < min_commits:
+            continue
+        try:
+            reviews.append(analyze(repo, commits_in, markers, name, today,
+                                   file_totals=file_totals, persona=persona))
+        except PipError:
+            continue
+    return sorted(reviews, key=lambda r: -r.overall_score)
 
 
 # --------------------------------------------------------------------------
@@ -418,7 +571,7 @@ def build_plan(review: Review) -> list[tuple[str, list[str]]]:
 # renderers
 # --------------------------------------------------------------------------
 
-def render_terminal(review: Review) -> str:
+def render_terminal(review: Review, previous: dict | None = None) -> str:
     lines = []
     lines.append("")
     lines.append(f"  PERFORMANCE IMPROVEMENT PLAN  -  {review.author}")
@@ -429,7 +582,21 @@ def render_terminal(review: Review) -> str:
         lines.append(f"  {c.name:<16} {c.letter}   {c.score:5.1f}  {bar}")
     lines.append("  " + "-" * 62)
     lines.append(f"  OVERALL          {review.overall_letter}   {review.overall_score:5.1f}")
-    lines.append(f"  {VERDICTS[review.overall_letter]}")
+    lines.append(f"  {verdict_for(review)}")
+    if previous and previous.get("overall_score") is not None:
+        delta = review.overall_score - float(previous["overall_score"])
+        if abs(delta) < 0.05:
+            delta = 0.0
+        when = previous.get("date", "previously")
+        arrow = "up" if delta > 0.05 else ("down" if delta < -0.05 else "flat")
+        lines.append(f"  Since your last review ({when}): {delta:+.1f} points, {arrow}. "
+                     + ("The plan is working." if delta > 0.05 else
+                        "The plan has notes." if delta < -0.05 else "Perfectly, suspiciously stable."))
+    if review.awards:
+        lines.append("")
+        lines.append("  AWARDS")
+        for title, reason in review.awards:
+            lines.append(f"  * {title} - {reason}")
     lines.append("")
     lines.append("  This review was generated locally from your own git history.")
     lines.append("  Nothing left this machine. Management has seen enough anyway.")
@@ -450,7 +617,8 @@ def render_markdown(review: Review) -> str:
     out.append("")
     out.append(f"## Overall assessment: {review.overall_letter} ({review.overall_score:.0f}/100)")
     out.append("")
-    out.append(f"*{VERDICTS[review.overall_letter]}*")
+    out.append(f"*{verdict_for(review)}*")
+    out.append(f"*Review style: {PERSONAS.get(review.persona, PERSONAS['corporate'])['label']}*")
     out.append("")
     out.append("This review is based entirely on the employee's own git history, "
                "the work diary every programmer keeps without meaning to. "
@@ -464,12 +632,28 @@ def render_markdown(review: Review) -> str:
             out.append(f"- {e}")
         out.append("")
         out.append(f"**Management notes:** {c.concern} {c.praise}")
+    h = review.highlights
+    out.append("")
+    out.append("## Additional findings")
+    out.append("")
+    if h.get("nemesis_file"):
+        out.append(f"- **Nemesis file:** {h['nemesis_file']} - {int(h['nemesis_churn']):,} lines of churn across the review period. You two have history.")
+    if h.get("biggest_commit_subject"):
+        out.append(f"- **Largest single commit:** {int(h['biggest_commit_lines']):,} lines changed in \"{h['biggest_commit_subject']}\". A bold unit of work.")
+    out.append(f"- **Weekend work:** {h['weekend_commits']} of {review.total_commits} commits landed on a Saturday or Sunday.")
+    out.append(f"- **Net lines:** {int(h['added']):,} added, {int(h['deleted']):,} deleted.")
+    if int(h.get("swears", 0)) > 0:
+        out.append(f"- **Language:** {h['swears']} commit messages contain profanity. The record reflects the journey.")
+    if review.awards:
+        out.append("")
+        out.append("## Awards")
+        out.append("")
+        for title, reason in review.awards:
+            out.append(f"- **{title}:** {reason}")
     out.append("")
     out.append("## 30-day improvement plan")
     out.append("")
-    out.append("The following actions address the lowest-scoring areas. "
-               "Progress will be assessed by re-running this review, which is to say, "
-               "by the record itself.")
+    out.append(str(PERSONAS.get(review.persona, PERSONAS["corporate"])["plan_intro"]))
     for name, actions in build_plan(review):
         out.append("")
         out.append(f"### {name}")
@@ -478,8 +662,7 @@ def render_markdown(review: Review) -> str:
     out.append("")
     out.append("## Sign-off")
     out.append("")
-    out.append("By continuing to commit, the employee acknowledges receipt of this plan. "
-               "Appeals may be filed by improving the record.")
+    out.append(str(PERSONAS.get(review.persona, PERSONAS["corporate"])["signoff"]))
     out.append("")
     out.append("Signed,  ")
     out.append("**Management**  ")
@@ -489,6 +672,79 @@ def render_markdown(review: Review) -> str:
 
 
 GRADE_COLORS = {"A": "#1d9e62", "B": "#5da423", "C": "#d9a400", "D": "#e07b24", "F": "#d43a2f"}
+
+
+def awards_html(review: Review) -> str:
+    if not review.awards:
+        return ""
+    items = "".join(
+        f'<div class="award"><b>{html.escape(t)}:</b> {html.escape(r)}</div>'
+        for t, r in review.awards)
+    return (f'<div style="margin-top:14px;border-top:2px solid #222;padding-top:10px">'
+            f'<div style="font-weight:bold;letter-spacing:1px;font-size:13px">AWARDS</div>{items}</div>')
+
+
+def render_svg(review: Review) -> str:
+    """A self-contained SVG report card: embeds in READMEs, posts anywhere."""
+    rows = ""
+    y = 168
+    for c in review.categories:
+        color = GRADE_COLORS[c.letter]
+        rows += (
+            f'<text x="36" y="{y}" font-size="15" font-weight="bold" fill="#222">{html.escape(c.name)}</text>'
+            f'<circle cx="212" cy="{y - 5}" r="12" fill="{color}"/>'
+            f'<text x="212" y="{y}" font-size="13" font-weight="bold" fill="#fff" text-anchor="middle">{c.letter}</text>'
+            f'<text x="238" y="{y}" font-size="12" fill="#555">{c.score:.0f}/100</text>\n'
+        )
+        y += 30
+    awards = ""
+    if review.awards:
+        titles = ", ".join(t for t, _ in review.awards[:3])
+        awards = (f'<text x="36" y="{y + 6}" font-size="12" fill="#333">'
+                  f'Awards: {html.escape(titles)}</text>')
+        y += 22
+    height = y + 34
+    overall_color = GRADE_COLORS[review.overall_letter]
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="680" height="{height}" viewBox="0 0 680 {height}" role="img" aria-label="PIP report card for {html.escape(review.author)}">
+  <rect x="3" y="3" width="674" height="{height - 6}" fill="#fffdf7" stroke="#222" stroke-width="3"/>
+  <text x="36" y="48" font-family="Georgia, serif" font-size="21" letter-spacing="2" fill="#222">PERFORMANCE IMPROVEMENT PLAN</text>
+  <text x="36" y="72" font-family="Georgia, serif" font-size="13" fill="#555">{html.escape(review.author)} | {html.escape(review.repo_name)} | {review.total_commits} commits | {review.span_start.isoformat()} to {review.span_end.isoformat()}</text>
+  <rect x="36" y="88" width="76" height="60" rx="8" fill="{overall_color}"/>
+  <text x="74" y="132" font-family="Georgia, serif" font-size="42" font-weight="bold" fill="#fff" text-anchor="middle">{review.overall_letter}</text>
+  <text x="128" y="112" font-family="Georgia, serif" font-size="14" font-style="italic" fill="#333">{html.escape(verdict_for(review))}</text>
+  <text x="128" y="134" font-family="Georgia, serif" font-size="12" fill="#777">Overall score: {review.overall_score:.0f}/100</text>
+  <line x1="36" y1="160" x2="644" y2="160" stroke="#222" stroke-width="1"/>
+{rows}{awards}
+  <text x="340" y="{height - 14}" font-family="Georgia, serif" font-size="11" fill="#777" text-anchor="middle">Generated locally by PIP from the employee's own git history. pip install on-a-pip</text>
+</svg>
+"""
+
+
+def render_badge(review: Review) -> str:
+    """A small shields-style grade badge for a README."""
+    color = GRADE_COLORS[review.overall_letter]
+    value = f"{review.overall_letter} ({review.overall_score:.0f}/100)"
+    label_w, value_w = 86, 12 + 8 * len(value)
+    total = label_w + value_w
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{total}" height="20" role="img" aria-label="PIP grade: {value}">
+  <rect width="{label_w}" height="20" fill="#555"/>
+  <rect x="{label_w}" width="{value_w}" height="20" fill="{color}"/>
+  <text x="{label_w / 2}" y="14" font-family="Verdana, sans-serif" font-size="11" fill="#fff" text-anchor="middle">my PIP grade</text>
+  <text x="{label_w + value_w / 2}" y="14" font-family="Verdana, sans-serif" font-size="11" fill="#fff" text-anchor="middle">{value}</text>
+</svg>
+"""
+
+
+def render_leaderboard(reviews: list[Review], repo_name: str) -> str:
+    lines = ["", f"  PIP LEADERBOARD  -  {repo_name}", "  " + "-" * 62,
+             f"  {'#':<3} {'Employee':<26} {'Grade':<6} {'Score':<7} {'Commits':<8} Top award"]
+    for i, r in enumerate(reviews, 1):
+        award = r.awards[0][0] if r.awards else "-"
+        lines.append(f"  {i:<3} {r.author[:25]:<26} {r.overall_letter:<6} {r.overall_score:<7.1f} {r.total_commits:<8} {award}")
+    lines.append("  " + "-" * 62)
+    lines.append("  Ranked by overall PIP score. Ties broken by whoever panics less.")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def render_html(review: Review) -> str:
@@ -523,8 +779,8 @@ def render_html(review: Review) -> str:
   <div class="sub">Employee: {html.escape(review.author)} &nbsp;|&nbsp; Project: {html.escape(review.repo_name)} &nbsp;|&nbsp;
   {review.total_commits} commits reviewed &nbsp;|&nbsp; {review.span_start.isoformat()} to {review.span_end.isoformat()}</div>
   <div class="overall"><div class="big">{review.overall_letter}</div>
-  <div class="verdict">"{VERDICTS[review.overall_letter]}"</div></div>
-{rows}
+  <div class="verdict">"{html.escape(verdict_for(review))}"</div></div>
+{rows}{awards_html(review)}
   <div class="foot">Generated locally by PIP from the employee's own git history. Nothing was uploaded.<br>
   pip install on-a-pip</div>
 </div></body></html>
@@ -543,8 +799,42 @@ def review_to_json(review: Review) -> dict:
             {"name": c.name, "letter": c.letter, "score": round(c.score, 1), "evidence": c.evidence}
             for c in review.categories
         ],
+        "awards": [{"title": t, "reason": r} for t, r in review.awards],
+        "persona": review.persona,
         "highlights": {k: v for k, v in review.highlights.items()},
     }
+
+
+# --------------------------------------------------------------------------
+# progress tracking (local only, like everything else here)
+# --------------------------------------------------------------------------
+
+def _progress_path(repo: str) -> str:
+    import hashlib
+    key = hashlib.sha1(os.path.abspath(repo).encode()).hexdigest()[:12]
+    base = os.path.join(os.path.expanduser("~"), ".config", "on-a-pip")
+    os.makedirs(base, exist_ok=True)
+    return os.path.join(base, f"{key}.json")
+
+
+def load_previous(repo: str) -> dict | None:
+    try:
+        with open(_progress_path(repo), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def save_current(repo: str, review: Review) -> None:
+    data = {"date": review.review_date.isoformat(),
+            "overall_score": round(review.overall_score, 1),
+            "overall_letter": review.overall_letter,
+            "author": review.author}
+    try:
+        with open(_progress_path(repo), "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except OSError:
+        pass
 
 
 # --------------------------------------------------------------------------
@@ -559,8 +849,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("repo", nargs="?", default=".", help="path to a git repository (default: current directory)")
     ap.add_argument("--author", help="review only commits by authors matching this text (default: most prolific author)")
     ap.add_argument("--max-commits", type=int, default=10000, help="cap on commits examined (default 10000)")
+    ap.add_argument("--days", type=int, help="review only the last N days of history (anchored at the most recent commit)")
+    ap.add_argument("--persona", choices=sorted(PERSONAS), default="corporate",
+                    help="the reviewing manager's style (default: corporate)")
+    ap.add_argument("--leaderboard", action="store_true",
+                    help="review every author in the repo and rank them")
     ap.add_argument("--md", metavar="FILE", help="write the full review as Markdown")
     ap.add_argument("--html", metavar="FILE", help="write the shareable report card as HTML")
+    ap.add_argument("--svg", metavar="FILE", help="write the shareable report card as SVG (embeds in READMEs)")
+    ap.add_argument("--badge", metavar="FILE", help="write a small grade badge as SVG")
     ap.add_argument("--json", action="store_true", help="print the review as JSON instead of the summary")
     ap.add_argument("--version", action="version", version=f"on-a-pip {__version__}")
     args = ap.parse_args(argv)
@@ -573,12 +870,27 @@ def main(argv: list[str] | None = None) -> int:
         commits = collect_commits(repo, args.max_commits)
         if not commits:
             raise PipError("this repository has no commits yet. Management cannot review potential.")
-        stats = collect_numstat(repo, {c.sha for c in commits})
+        commits = scope_commits(commits, args.days)
+        if not commits:
+            raise PipError("no commits in the requested period. Management cannot review a rumor.")
+        stats, file_totals = collect_numstat(repo, {c.sha for c in commits})
         for c in commits:
             if c.sha in stats:
                 c.added, c.deleted, c.files = stats[c.sha]
         markers = collect_markers(repo)
-        review = analyze(repo, commits, markers, args.author, date.today())
+        if args.leaderboard:
+            board = leaderboard(repo, commits, markers, date.today(),
+                                file_totals=file_totals, persona=args.persona)
+            if not board:
+                raise PipError("no author has enough commits to rank yet")
+            repo_name = os.path.basename(repo) or repo
+            if args.json:
+                print(json.dumps({"leaderboard": [review_to_json(r) for r in board]}, indent=2, default=str))
+            else:
+                print(render_leaderboard(board, repo_name))
+            return 0
+        review = analyze(repo, commits, markers, args.author, date.today(),
+                         file_totals=file_totals, persona=args.persona)
     except PipError as e:
         print(f"on-a-pip: {e}", file=sys.stderr)
         return 2
@@ -586,10 +898,12 @@ def main(argv: list[str] | None = None) -> int:
         print("on-a-pip: git was not found on this machine", file=sys.stderr)
         return 2
 
+    previous = load_previous(repo)
     if args.json:
         print(json.dumps(review_to_json(review), indent=2, default=str))
     else:
-        print(render_terminal(review))
+        print(render_terminal(review, previous=previous))
+    save_current(repo, review)
     if args.md:
         with open(args.md, "w", encoding="utf-8") as f:
             f.write(render_markdown(review))
@@ -598,6 +912,14 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.html, "w", encoding="utf-8") as f:
             f.write(render_html(review))
         print(f"Report card written to {args.html}")
+    if args.svg:
+        with open(args.svg, "w", encoding="utf-8") as f:
+            f.write(render_svg(review))
+        print(f"SVG report card written to {args.svg}")
+    if args.badge:
+        with open(args.badge, "w", encoding="utf-8") as f:
+            f.write(render_badge(review))
+        print(f"Badge written to {args.badge}")
     if review.total_commits < 10:
         print("Note: fewer than 10 commits reviewed. Management is extrapolating, "
               "the way management does.", file=sys.stderr)
