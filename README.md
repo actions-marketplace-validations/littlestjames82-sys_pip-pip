@@ -89,6 +89,9 @@ on-a-pip --quarter                # the quarterly ritual: last 90 days, compared
 on-a-pip --year 2026              # PIP Wrapped: your year in commits, as a shareable edition
 on-a-pip --outdir ./my-review     # write every artifact at once: review, cards, badge, reference, JSON
 on-a-pip --fail-below B           # exit code 3 if the grade is worse than B (a CI gate, serious or otherwise)
+on-a-pip --history                # your grade trend across every saved review of this repo
+on-a-pip --coach                  # coaching mode: a four-week drill plan instead of a verdict
+on-a-pip --blame app.py           # a performance review for one file: every commit that touched it
 on-a-pip --leaderboard            # review every author in the repo and rank them
 on-a-pip psf/requests               # or skip the local part entirely: any public repo by URL
 on-a-pip --json                   # machine-readable review
@@ -106,6 +109,11 @@ on-a-pip --json                   # machine-readable review
 - **PIP Wrapped** (`--year`): the year-in-commits edition, with its own dark Wrapped card: busiest month, top award, your catchphrase.
 - **Hall of fame stats:** longest commit message (the novel), shortest (the haiku), and your catchphrase, the word your subjects cannot stop using.
 - Report cards chart your commits per month; `--outdir` writes the full artifact set in one run; `--fail-below` turns a grade into a CI gate.
+- **History** (`--history`): every review is saved locally, so your grade becomes a trend line with bars, not a one-off verdict.
+- **Coaching mode** (`--coach`): four weeks of drills aimed at your three weakest categories, each with a measurable check.
+- **File reviews** (`--blame`): one file, every commit that ever touched it, formally reviewed.
+- **Repo config:** a `.pip.toml` in the repo root can set `persona` and `fail_below` once for the whole team; the command line still wins.
+- 21 awards now, including The Archaeologist (revives files untouched for a year), Merge Goblin, Lone Wolf, and Rubber Duck (commit bodies longer than some READMEs).
 
 ## The gallery
 
@@ -169,7 +177,7 @@ MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).
 
 ![PIP report card](pip-card.svg)
 
-**Grade: B (78/100)** · 16 commits reviewed · Top award: Night Owl · Reviewed 2026-11-19
+**Grade: B (81/100)** · 9 commits reviewed · Top award: Polyglot · Reviewed 2026-11-18
 
 *This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) (`on-a-pip --readme`). The record speaks for itself.*
 <!-- pip:end -->

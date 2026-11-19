@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -109,6 +109,8 @@ class Commit:
     added: int = 0
     deleted: int = 0
     files: int = 0
+    parents: int = 1
+    paths: tuple = ()
 
 
 @dataclass
@@ -137,7 +139,7 @@ def _parse_iso(text: str) -> datetime:
 
 
 def collect_commits(repo: str, max_commits: int) -> list[Commit]:
-    fmt = FS.join(["%H", "%aN", "%aE", "%aI", "%s", "%b"]) + RS
+    fmt = FS.join(["%H", "%P", "%aN", "%aE", "%aI", "%s", "%b"]) + RS
     out = _git(repo, ["log", "--use-mailmap", f"--max-count={max_commits}", f"--format={fmt}"])
     commits: list[Commit] = []
     for rec in out.split(RS):
@@ -145,15 +147,17 @@ def collect_commits(repo: str, max_commits: int) -> list[Commit]:
         if not rec.strip():
             continue
         parts = rec.split(FS)
-        if len(parts) < 6:
+        if len(parts) < 7:
             continue
-        sha, author, email, iso, subject, body = parts[0], parts[1], parts[2], parts[3], parts[4], FS.join(parts[5:])
+        sha, parents, author, email, iso, subject, body = (
+            parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], FS.join(parts[6:]))
         try:
             when = _parse_iso(iso)
         except ValueError:
             continue
         commits.append(Commit(sha=sha, author=author, email=email, when=when,
-                              subject=subject.strip(), body=body.strip()))
+                              subject=subject.strip(), body=body.strip(),
+                              parents=len(parents.split()) if parents.strip() else 0))
     return commits
 
 
@@ -167,6 +171,7 @@ def collect_numstat(repo: str, shas: set[str], cap: int = 5000):
     out = _git(repo, ["log", f"--max-count={cap}", "--numstat", "--format=%H"])
     stats: dict[str, tuple[int, int, int]] = {}
     files: dict[str, tuple[int, int, int]] = {}
+    paths: dict[str, list[str]] = {}
     current: str | None = None
     for line in out.splitlines():
         line = line.strip()
@@ -176,6 +181,7 @@ def collect_numstat(repo: str, shas: set[str], cap: int = 5000):
             current = line
             if current in shas:
                 stats.setdefault(current, (0, 0, 0))
+                paths.setdefault(current, [])
             continue
         if current is None or current not in shas:
             continue
@@ -189,9 +195,10 @@ def collect_numstat(repo: str, shas: set[str], cap: int = 5000):
             fname = parts[2]
             if " => " in fname:
                 fname = fname.split(" => ")[-1].strip("{}")
+            paths[current].append(fname)
             fa, fd, fc = files.get(fname, (0, 0, 0))
             files[fname] = (fa + added, fd + deleted, fc + 1)
-    return stats, files
+    return stats, files, paths
 
 
 MARKER_RE = re.compile(r"\b(TODO|FIXME|HACK|XXX|TEMPORARY|TEMP|WORKAROUND)\b[:\s]?(.*)", re.IGNORECASE)
@@ -619,6 +626,31 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
         awards.append(("Old Faithful", f"Commits spanning {span_days // 365} years on the same codebase. It has outlived three roadmaps and a rebrand."))
     if phoenix:
         awards.append(("Phoenix", "Vanished for a season, then came back swinging. The comeback commits outnumber the goodbye ones, because there were no goodbye ones."))
+    # --- award wave 2 (v0.8) ---------------------------------------------
+    merge_commits = [c for c in commits if c.parents >= 2 or c.subject.startswith("Merge ")]
+    if total >= 8 and len(merge_commits) / total >= 0.25:
+        awards.append(("Merge Goblin", f"{len(merge_commits)} of {total} commits are merges. Somewhere upstream, a rebase weeps quietly."))
+    if len(groups) == 1 and total >= 20:
+        awards.append(("Lone Wolf", f"Every one of the {total} commits is theirs. The team is a person. The person is the team."))
+    avg_body = sum(len(c.body) for c in commits) / total if total else 0
+    if total >= 5 and avg_body >= 200:
+        awards.append(("Rubber Duck", f"Commit bodies average {avg_body:.0f} characters. The reasoning is all there. All of it. Every thought."))
+    timelines: dict[str, list[datetime]] = {}
+    for c in commits_in:
+        for p in c.paths:
+            timelines.setdefault(p, []).append(c.when)
+    for v in timelines.values():
+        v.sort()
+    revived = 0
+    for c in commits:
+        for p in c.paths:
+            dates = timelines.get(p, [])
+            earlier = [d for d in dates if d < c.when]
+            if earlier and (c.when - max(earlier)).days >= 365:
+                revived += 1
+                break
+    if revived >= 1:
+        awards.append(("The Archaeologist", f"Revived {revived} commit(s) touching files untouched for over a year. Brushed off the dust, read the ancient comments, understood nothing, proceeded anyway."))
 
     return Review(
         repo_name=os.path.basename(os.path.abspath(repo)) or repo,
@@ -1057,10 +1089,11 @@ def scan_repos(root: str, persona: str = "corporate", today: date | None = None,
             commits = collect_commits(path, max_commits)
             if not commits:
                 continue
-            stats, file_totals = collect_numstat(path, {c.sha for c in commits})
+            stats, file_totals, paths_by_sha = collect_numstat(path, {c.sha for c in commits})
             for c in commits:
                 if c.sha in stats:
                     c.added, c.deleted, c.files = stats[c.sha]
+                    c.paths = tuple(paths_by_sha.get(c.sha, ()))
             markers = collect_markers(path)
             review = analyze(path, commits, markers, None, today,
                              file_totals=file_totals, persona=persona)
@@ -1247,15 +1280,141 @@ def load_previous(repo: str) -> dict | None:
 
 
 def save_current(repo: str, review: Review) -> None:
-    data = {"date": review.review_date.isoformat(),
-            "overall_score": round(review.overall_score, 1),
-            "overall_letter": review.overall_letter,
-            "author": review.author}
+    entry = {"date": review.review_date.isoformat(),
+             "overall_score": round(review.overall_score, 1),
+             "overall_letter": review.overall_letter,
+             "author": review.author}
+    existing = load_previous(repo) or {}
+    hist = existing.get("history")
+    if not isinstance(hist, list):
+        hist = [{k: existing.get(k) for k in entry}] if existing.get("date") else []
+    hist.append(entry)
+    data = {**entry, "history": hist[-50:]}
     try:
         with open(_progress_path(repo), "w", encoding="utf-8") as f:
             json.dump(data, f)
     except OSError:
         pass
+
+
+def load_history(repo: str) -> list[dict]:
+    data = load_previous(repo)
+    if not data:
+        return []
+    hist = data.get("history")
+    if isinstance(hist, list):
+        return hist
+    if data.get("date"):
+        return [{"date": data.get("date"), "overall_score": data.get("overall_score"),
+                 "overall_letter": data.get("overall_letter"), "author": data.get("author")}]
+    return []
+
+
+def render_history(entries: list[dict], repo_name: str) -> str:
+    lines = ["", f"  REVIEW HISTORY  -  {repo_name}", "  " + "-" * 62]
+    for e in entries:
+        score = float(e.get("overall_score") or 0)
+        bar = "█" * max(1, round(score / 5))
+        lines.append(f"  {e.get('date')}  {e.get('overall_letter')}  {score:5.1f}  {bar}")
+    lines.append("  " + "-" * 62)
+    if len(entries) >= 2:
+        delta = float(entries[-1].get("overall_score") or 0) - float(entries[0].get("overall_score") or 0)
+        if delta > 2:
+            lines.append(f"  Trend: up {delta:.1f} points over {len(entries)} reviews. Management notes the trajectory, approvingly.")
+        elif delta < -2:
+            lines.append(f"  Trend: down {abs(delta):.1f} points over {len(entries)} reviews. Management notes the trajectory, with a folder.")
+        else:
+            lines.append(f"  Trend: flat over {len(entries)} reviews. Consistency, or a plateau wearing its clothes.")
+    lines.append("")
+    return "\n".join(lines)
+
+
+DRILLS: dict[str, list[tuple[str, str]]] = {
+    "Communication": [
+        ("Every commit subject this week must complete the sentence 'This change will...' before you type it.", "Zero subjects under 10 characters."),
+        ("Add a body to every commit explaining why, not what. The diff already says what.", "Body ratio above 80% for the week."),
+        ("Ban the words stuff, things, wip, and misc from subjects. If it needs 'misc', it needs two commits.", "Vague-subject count: zero."),
+        ("Write one commit message as if the reader is you, in six months, at 2am, during an outage.", "At least one message a stranger could act on."),
+    ],
+    "Reliability": [
+        ("No commits after 4pm on Fridays. Write them, branch them, ship them Monday.", "Friday-late count: zero."),
+        ("Before any fix, write down what the last change to that file was. Then fix.", "Revert count: zero."),
+        ("Every commit after 1am gets a comment the next morning explaining itself.", "Night commits all accounted for."),
+        ("One change per commit, one concern per branch. If the subject needs 'and', split it.", "Average files per commit trending down."),
+    ],
+    "Follow-through": [
+        ("Pick the oldest TODO you own. Close it or delete it. One per day.", "Oldest TODO younger than last week."),
+        ("Every 'temporary' fix gets a calendar date in the comment, and the date is this month.", "No undated temporary fixes."),
+        ("End each day by finishing one thing instead of starting one thing.", "Work in progress: fewer than three branches."),
+        ("Revisit last week's workaround and replace it with the real fix.", "One workaround retired."),
+    ],
+    "Judgment": [
+        ("Before deleting more than 200 lines, write the reason in the commit body.", "Every big deletion explained."),
+        ("If a commit needs the word 'hack', it needs a follow-up note in the same breath.", "Hacks with follow-ups: all of them."),
+        ("Revert rehearsal: practice reverting your own last commit in a scratch branch.", "You can undo anything you ship, quickly."),
+        ("Ask 'what breaks if this is wrong?' and put the answer in the message.", "Risk notes present on risky commits."),
+    ],
+    "Consistency": [
+        ("Commit something small every working day. Streaks are built from boring days.", "Five active days this week."),
+        ("Set a commit o'clock: same hour daily, ten minutes, tidy one thing.", "No gaps longer than three days."),
+        ("Batch the chaos: one planned work block beats six panic commits.", "Commits spread across the week, not piled onto one day."),
+        ("End the week by committing the thing you have been avoiding since Monday.", "The avoided thing: shipped."),
+    ],
+}
+
+
+def coach_plan(review: Review) -> list[tuple[int, str, str, str]]:
+    weakest = sorted(review.categories, key=lambda c: c.score)[:3]
+    plan = []
+    for week in range(1, 5):
+        cat = weakest[(week - 1) % len(weakest)]
+        drill, check = DRILLS[cat.name][week - 1]
+        plan.append((week, cat.name, drill, check))
+    return plan
+
+
+def render_coach(review: Review) -> str:
+    lines = ["",
+             f"  DEVELOPMENT PLAN (COACHING MODE)  -  {review.author}",
+             f"  {review.repo_name}  |  current grade {review.overall_letter} ({review.overall_score:.0f}/100)",
+             "  " + "=" * 62,
+             "  No verdict this time. Just the work. Four weeks, one drill a week,",
+             "  each aimed at a category that needs it, each with a way to check.",
+             ""]
+    for week, cat, drill, check in coach_plan(review):
+        lines.append(f"  Week {week}  [{cat}]")
+        lines.append(f"    Drill: {drill}")
+        lines.append(f"    Check: {check}")
+        lines.append("")
+    lines.append("  Re-run PIP in four weeks. The grade will have opinions about attendance.")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_coach_markdown(review: Review) -> str:
+    out = [f"## Development plan (coaching mode) for {review.author}", ""]
+    for week, cat, drill, check in coach_plan(review):
+        out.append(f"- **Week {week} [{cat}]:** {drill} *Check: {check}*")
+    out.append("")
+    return "\n".join(out)
+
+
+def load_repo_config(repo: str) -> dict:
+    """Read .pip.toml defaults (persona, fail_below) from the repo root.
+    Deliberately a tiny parser: two string keys, no dependency on tomllib
+    (Python 3.11+) so 3.9 and 3.10 keep working."""
+    cfg: dict[str, str] = {}
+    try:
+        with open(os.path.join(repo, ".pip.toml"), encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return cfg
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        m = re.match(r'^(persona|fail_below)\s*=\s*"([^"]+)"', line)
+        if m:
+            cfg[m.group(1)] = m.group(2)
+    return cfg
 
 
 # --------------------------------------------------------------------------
@@ -1281,7 +1440,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--reference", metavar="FILE", help="also write a letter of reference based on the grade")
     ap.add_argument("--readme", action="store_true",
                     help="write pip-card.svg and pip-badge.svg into the repo and add or refresh the PIP section in its README")
-    ap.add_argument("--persona", choices=sorted(PERSONAS), default="corporate",
+    ap.add_argument("--persona", choices=sorted(PERSONAS), default=None,
                     help="the reviewing manager's style (default: corporate)")
     ap.add_argument("--leaderboard", action="store_true",
                     help="review every author in the repo and rank them")
@@ -1296,6 +1455,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--top", type=int, default=8, help="leaderboard size (default 8)")
     ap.add_argument("--outdir", metavar="DIR",
                     help="write every artifact (review, cards, badge, reference, JSON) into this directory")
+    ap.add_argument("--history", action="store_true",
+                    help="print this repo's grade history from your saved reviews, then exit")
+    ap.add_argument("--coach", action="store_true",
+                    help="coaching mode: a four-week drill plan for the weakest categories instead of a verdict")
+    ap.add_argument("--blame", metavar="FILE",
+                    help="review only the commits that touched this file")
     ap.add_argument("--fail-below", choices=["A", "B", "C", "D", "F"], metavar="GRADE",
                     help="exit with code 3 if the overall grade is worse than GRADE (for CI gates, serious or otherwise)")
     ap.add_argument("--md", metavar="FILE", help="write the full review as Markdown")
@@ -1330,6 +1495,18 @@ def main(argv: list[str] | None = None) -> int:
     repo = os.path.abspath(repo_arg)
     if not is_clone_target(args.repo):
         progress_key = repo
+    cfg = load_repo_config(repo) if os.path.isdir(repo) else {}
+    if args.persona is None:
+        args.persona = cfg.get("persona") if cfg.get("persona") in PERSONAS else "corporate"
+    if args.fail_below is None and cfg.get("fail_below") in ("A", "B", "C", "D", "F"):
+        args.fail_below = cfg["fail_below"]
+    if args.history:
+        entries = load_history(progress_key)
+        if not entries:
+            print("No review history yet for this repository. Run a review first; history starts there.")
+        else:
+            print(render_history(entries, os.path.basename(repo) or repo))
+        return 0
     if args.quarter and args.days is None and not (args.since or args.until):
         args.days = 90
     if args.year and not (args.since or args.until):
@@ -1366,10 +1543,17 @@ def main(argv: list[str] | None = None) -> int:
             commits = [c for c in commits if lo <= c.when.date() <= hi]
         if not commits:
             raise PipError("no commits in the requested period. Management cannot review a rumor.")
-        stats, file_totals = collect_numstat(repo, {c.sha for c in commits})
+        stats, file_totals, paths_by_sha = collect_numstat(repo, {c.sha for c in commits})
         for c in commits:
             if c.sha in stats:
                 c.added, c.deleted, c.files = stats[c.sha]
+                c.paths = tuple(paths_by_sha.get(c.sha, ()))
+        if args.blame:
+            target = args.blame.replace(os.sep, "/")
+            commits = [c for c in commits
+                       if any(p == target or p.endswith("/" + target) for p in c.paths)]
+            if not commits:
+                raise PipError(f"no commits touched '{args.blame}' in this repository's history.")
         markers = collect_markers(repo)
         if args.vs:
             first = analyze(repo, commits, markers, args.vs[0], date.today(),
@@ -1399,6 +1583,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         review = analyze(repo, commits, markers, args.author, date.today(),
                          file_totals=file_totals, persona=args.persona)
+        if args.blame:
+            review.repo_name = f"{review.repo_name} :: {args.blame}"
     except PipError as e:
         print(f"on-a-pip: {e}", file=sys.stderr)
         return 2
@@ -1406,17 +1592,23 @@ def main(argv: list[str] | None = None) -> int:
         print("on-a-pip: git was not found on this machine", file=sys.stderr)
         return 2
 
-    previous = load_previous(progress_key)
+    previous = None if args.blame else load_previous(progress_key)
     if args.json:
         print(json.dumps(review_to_json(review), indent=2, default=str))
+    elif args.coach:
+        print(render_coach(review))
     elif args.year:
         print(render_wrapped(review, args.year))
     else:
         print(render_terminal(review, previous=previous))
-    save_current(progress_key, review)
+    if not args.blame:
+        save_current(progress_key, review)
     if args.md:
         with open(args.md, "w", encoding="utf-8") as f:
-            f.write(render_markdown(review))
+            content = render_markdown(review)
+            if args.coach:
+                content += "\n" + render_coach_markdown(review)
+            f.write(content)
         print(f"Full review written to {args.md}")
     if args.html:
         with open(args.html, "w", encoding="utf-8") as f:

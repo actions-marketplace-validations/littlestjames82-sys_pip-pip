@@ -37,10 +37,12 @@ def main() -> int:
             subprocess.run(["git", "clone", "--quiet", url, tmp],
                            check=True, timeout=900)
             commits = pip_pip.collect_commits(tmp, 5000)
-            stats, file_totals = pip_pip.collect_numstat(tmp, {c.sha for c in commits})
+            stats, file_totals, paths_by_sha = pip_pip.collect_numstat(tmp, {c.sha for c in commits})
             for c in commits:
                 if c.sha in stats:
                     c.added, c.deleted, c.files = stats[c.sha]
+        c.paths = tuple(paths_by_sha.get(c.sha, ()))
+                c.paths = tuple(paths_by_sha.get(c.sha, ()))
             markers = pip_pip.collect_markers(tmp)
             board = pip_pip.leaderboard(tmp, commits, markers, date.today(),
                                          file_totals=file_totals, top=5)

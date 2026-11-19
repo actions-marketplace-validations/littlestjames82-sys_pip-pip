@@ -85,10 +85,11 @@ def weekday_at(days_ago, weekday, hour, minute=0):
 
 def review_of(repo, **kw):
     commits = pip_pip.collect_commits(repo, 10000)
-    stats, file_totals = pip_pip.collect_numstat(repo, {c.sha for c in commits})
+    stats, file_totals, paths_by_sha = pip_pip.collect_numstat(repo, {c.sha for c in commits})
     for c in commits:
         if c.sha in stats:
             c.added, c.deleted, c.files = stats[c.sha]
+            c.paths = tuple(paths_by_sha.get(c.sha, ()))
     markers = pip_pip.collect_markers(repo)
     return pip_pip.analyze(repo, commits, markers, None, date.today(),
                             file_totals=file_totals, **kw)
@@ -257,10 +258,11 @@ class V2FeaturesTest(unittest.TestCase):
 
     def test_leaderboard_ranks_both_authors(self):
         commits = pip_pip.collect_commits(self.repo, 10000)
-        stats, file_totals = pip_pip.collect_numstat(self.repo, {c.sha for c in commits})
+        stats, file_totals, paths_by_sha = pip_pip.collect_numstat(self.repo, {c.sha for c in commits})
         for c in commits:
             if c.sha in stats:
                 c.added, c.deleted, c.files = stats[c.sha]
+                c.paths = tuple(paths_by_sha.get(c.sha, ()))
         markers = pip_pip.collect_markers(self.repo)
         board = pip_pip.leaderboard(self.repo, commits, markers, date.today(),
                                     file_totals=file_totals, min_commits=3)
@@ -400,10 +402,11 @@ class LeaderboardIdentityTest(unittest.TestCase):
                    author="Pat Dev <pat2@example.com>",
                    append={"p.py": f"# b{i}\n"})
         commits = pip_pip.collect_commits(repo, 10000)
-        stats, file_totals = pip_pip.collect_numstat(repo, {c.sha for c in commits})
+        stats, file_totals, paths_by_sha = pip_pip.collect_numstat(repo, {c.sha for c in commits})
         for c in commits:
             if c.sha in stats:
                 c.added, c.deleted, c.files = stats[c.sha]
+                c.paths = tuple(paths_by_sha.get(c.sha, ()))
         markers = pip_pip.collect_markers(repo)
         board = pip_pip.leaderboard(repo, commits, markers, date.today(),
                                     file_totals=file_totals, min_commits=3)
@@ -486,10 +489,11 @@ class V6FeaturesTest(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         repo = self._two_author_repo(tmp)
         commits = pip_pip.collect_commits(repo, 10000)
-        stats, file_totals = pip_pip.collect_numstat(repo, {c.sha for c in commits})
+        stats, file_totals, paths_by_sha = pip_pip.collect_numstat(repo, {c.sha for c in commits})
         for c in commits:
             if c.sha in stats:
                 c.added, c.deleted, c.files = stats[c.sha]
+                c.paths = tuple(paths_by_sha.get(c.sha, ()))
         markers = pip_pip.collect_markers(repo)
         dev = pip_pip.analyze(repo, commits, markers, "Dev Example", date.today(),
                               file_totals=file_totals)
@@ -610,3 +614,148 @@ class V7FeaturesTest(unittest.TestCase):
         for fname in ("review.md", "report-card.html", "report-card.svg",
                       "badge.svg", "reference.md", "review.json"):
             self.assertTrue(os.path.exists(os.path.join(outdir, fname)), fname)
+
+
+class V8FeaturesTest(unittest.TestCase):
+    def _quiet_main(self, argv):
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = pip_pip.main(argv)
+        return rc, buf.getvalue()
+
+    def test_lone_wolf(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "wolf")
+        make_repo(repo)
+        for i in range(20):
+            commit(repo, at(60 - i * 2, 10), f"explained improvement number {i} for the record",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        titles = [t for t, _ in review_of(repo).awards]
+        self.assertIn("Lone Wolf", titles)
+
+    def test_rubber_duck(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "duck")
+        make_repo(repo)
+        body = "Reasoning: " + ("this matters because the reader deserves the full story. " * 5)
+        for i in range(5):
+            commit(repo, at(30 - i * 3, 10), f"a considered change number {i} with context",
+                   body=body, files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        titles = [t for t, _ in review_of(repo).awards]
+        self.assertIn("Rubber Duck", titles)
+
+    def test_archaeologist(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "dig")
+        make_repo(repo)
+        commit(repo, at(800, 10), "create the ancient module with explanation",
+               files={"old.py": "# ancient\n"})
+        commit(repo, at(400, 10), "meanwhile a newer feature lands elsewhere",
+               files={"new.py": "x\n"})
+        commit(repo, at(10, 10), "revive the ancient module for a modern need",
+               append={"old.py": "# revived\n"})
+        titles = [t for t, _ in review_of(repo).awards]
+        self.assertIn("The Archaeologist", titles)
+
+    def test_merge_goblin(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "goblin")
+        make_repo(repo)
+
+        def env(days_ago):
+            when = datetime.now(timezone.utc) - timedelta(days=days_ago)
+            stamp = when.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            return dict(GIT_AUTHOR_DATE=stamp, GIT_COMMITTER_DATE=stamp,
+                        GIT_AUTHOR_NAME="Dev Example", GIT_AUTHOR_EMAIL="dev@example.com",
+                        GIT_COMMITTER_NAME="Dev Example", GIT_COMMITTER_EMAIL="dev@example.com")
+
+        def git(*args, days_ago=90):
+            _run(repo, *args, env_extra=env(days_ago))
+
+        with open(os.path.join(repo, "a.py"), "w") as f:
+            f.write("x\n")
+        git("add", "-A")
+        git("commit", "-q", "-m", "base commit with an explanation")
+        main_branch = subprocess.run(["git", "-C", repo, "branch", "--show-current"],
+                                     capture_output=True, text=True).stdout.strip() or "main"
+        day = 88
+        for cycle in range(2):
+            git("checkout", "-q", "-b", f"feat{cycle}", days_ago=day)
+            with open(os.path.join(repo, f"f{cycle}.py"), "w") as fh:
+                fh.write("y\n")
+            git("add", "-A", days_ago=day)
+            git("commit", "-q", "-m", f"branch work cycle {cycle} explained", days_ago=day)
+            git("checkout", "-q", main_branch, days_ago=day - 1)
+            with open(os.path.join(repo, "a.py"), "a") as fh:
+                fh.write(f"# main {cycle}\n")
+            git("add", "-A", days_ago=day - 1)
+            git("commit", "-q", "-m", f"main work cycle {cycle} explained", days_ago=day - 1)
+            git("merge", "-q", "--no-ff", f"feat{cycle}", "-m", f"Merge branch feat{cycle}",
+                days_ago=day - 2)
+            day -= 10
+        with open(os.path.join(repo, "a.py"), "a") as fh:
+            fh.write("# tail\n")
+        git("add", "-A", days_ago=60)
+        git("commit", "-q", "-m", "a final explained change for the count", days_ago=60)
+        review = review_of(repo)
+        self.assertEqual(review.total_commits, 8)
+        titles = [t for t, _ in review.awards]
+        self.assertIn("Merge Goblin", titles)
+
+    def test_coach_plan(self):
+        MessyDevTest.setUpClass()
+        review = MessyDevTest.review
+        plan = pip_pip.coach_plan(review)
+        self.assertEqual(len(plan), 4)
+        weakest = {c.name for c in sorted(review.categories, key=lambda c: c.score)[:3]}
+        self.assertTrue(all(cat in weakest for _w, cat, _d, _c in plan))
+        text = pip_pip.render_coach(review)
+        self.assertIn("DEVELOPMENT PLAN", text)
+        self.assertIn("Week 1", text)
+
+    def test_history_round_trip(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "hist")
+        make_repo(repo)
+        commit(repo, at(9, 10), "a documented change for history", files={"a.py": "x\n"})
+        commit(repo, at(4, 10), "a second explained improvement on record", append={"a.py": "y\n"})
+        rc1, _ = self._quiet_main([repo])
+        rc2, _ = self._quiet_main([repo])
+        self.assertEqual((rc1, rc2), (0, 0))
+        entries = pip_pip.load_history(repo)
+        self.assertEqual(len(entries), 2)
+        rc3, out = self._quiet_main([repo, "--history"])
+        self.assertEqual(rc3, 0)
+        self.assertIn("REVIEW HISTORY", out)
+
+    def test_blame_filters_to_file(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "blamey")
+        make_repo(repo)
+        commit(repo, at(20, 10), "start a with an explanation", files={"a.py": "x\n"})
+        commit(repo, at(15, 10), "start b with an explanation", files={"b.py": "x\n"})
+        commit(repo, at(10, 10), "extend a further with context", append={"a.py": "y\n"})
+        commit(repo, at(5, 10), "extend b further with context", append={"b.py": "y\n"})
+        rc, out = self._quiet_main([repo, "--blame", "b.py", "--json"])
+        self.assertEqual(rc, 0)
+        data = json.loads(out)
+        self.assertEqual(data["total_commits"], 2)
+        self.assertIn("b.py", data["repo"])
+
+    def test_pip_toml_config_and_cli_override(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "cfg")
+        make_repo(repo)
+        with open(os.path.join(repo, ".pip.toml"), "w") as f:
+            f.write('persona = "brutal"\n')
+        commit(repo, at(9, 10), "a documented change for config", files={"a.py": "x\n"})
+        commit(repo, at(4, 10), "a second explained improvement on record", append={"a.py": "y\n"})
+        rc, out = self._quiet_main([repo, "--json"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.loads(out)["persona"], "brutal")
+        rc, out = self._quiet_main([repo, "--json", "--persona", "corporate"])
+        self.assertEqual(json.loads(out)["persona"], "corporate")
