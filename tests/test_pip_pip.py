@@ -74,6 +74,15 @@ def friday_at(days_ago, hour):
     return datetime.combine(d, time(hour, 30), tzinfo=UTC)
 
 
+def weekday_at(days_ago, weekday, hour, minute=0):
+    """Pin a commit to a specific weekday (0=Mon) near days_ago, so fixtures
+    that count weekday-sensitive metrics stay true on any run date."""
+    d = date.today() - timedelta(days=days_ago)
+    while d.weekday() != weekday:
+        d -= timedelta(days=1)
+    return datetime.combine(d, time(hour, minute), tzinfo=UTC)
+
+
 def review_of(repo, **kw):
     commits = pip_pip.collect_commits(repo, 10000)
     stats, file_totals = pip_pip.collect_numstat(repo, {c.sha for c in commits})
@@ -93,7 +102,7 @@ class MessyDevTest(unittest.TestCase):
         make_repo(cls.repo)
         commit(cls.repo, at(400, 10), "initial commit with project scaffold and readme",
                files={"app.py": "# TODO: refactor this someday\nprint('v1')\n"})
-        commit(cls.repo, at(300, 23, 30), "stuff", append={"app.py": "print('more')\n"})
+        commit(cls.repo, weekday_at(300, 2, 23, 30), "stuff", append={"app.py": "print('more')\n"})
         commit(cls.repo, at(299, 1, 15), "wip", append={"app.py": "print('even more')\n"})
         commit(cls.repo, friday_at(200, 17), "fix", append={"app.py": "print('friday')\n"})
         commit(cls.repo, at(198, 11), 'Revert "fix"', append={"app.py": "print('undo')\n"})
