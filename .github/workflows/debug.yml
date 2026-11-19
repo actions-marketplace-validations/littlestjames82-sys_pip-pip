@@ -1,0 +1,45 @@
+name: debug
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Probe git log format bytes
+        run: |
+          git --version
+          python3 --version
+          mkdir probe && cd probe
+          git init -q
+          git config user.name "Dev Example"
+          git config user.email "dev@example.com"
+          git config commit.gpgsign false
+          echo x > a.py
+          git add -A
+          GIT_AUTHOR_DATE="2026-01-23T23:30:00+00:00" GIT_COMMITTER_DATE="2026-01-23T23:30:00+00:00" git commit -q -m "test subject"
+          python3 - <<'PYEOF'
+          import subprocess
+          FS = "\x1f"; RS = "\x1e"
+          fmt = FS.join(["%H", "%an", "%ae", "%aI", "%s", "%b"]) + RS
+          out = subprocess.run(["git", "log", "--max-count=10000", f"--format={fmt}"],
+                               capture_output=True, text=True, encoding="utf-8", errors="replace")
+          print("rc:", out.returncode)
+          print("stderr:", out.stderr[:300])
+          print("raw repr:", repr(out.stdout[:220]))
+          rec = out.stdout.split(RS)[0].strip("\n")
+          parts = rec.split(FS)
+          print("parts:", len(parts), [p[:30] for p in parts])
+          from datetime import datetime
+          try:
+              print("parsed:", datetime.fromisoformat(parts[3]))
+          except Exception as e:
+              print("fromisoformat error:", type(e).__name__, e, "field:", repr(parts[3]))
+          PYEOF
