@@ -1,17 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="680" height="374" viewBox="0 0 680 374" role="img" aria-label="PIP report card for Ryan Cotten">
-  <rect x="3" y="3" width="674" height="368" fill="#fffdf7" stroke="#222" stroke-width="3"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="422" viewBox="0 0 680 422" role="img" aria-label="PIP report card for Ryan Cotten">
+  <rect x="3" y="3" width="674" height="416" fill="#fffdf7" stroke="#222" stroke-width="3"/>
   <text x="36" y="48" font-family="Georgia, serif" font-size="21" letter-spacing="2" fill="#222">PERFORMANCE IMPROVEMENT PLAN</text>
-  <text x="36" y="72" font-family="Georgia, serif" font-size="13" fill="#555">Ryan Cotten | pip-pip | 9 commits | 2026-11-18 to 2026-11-18</text>
+  <text x="36" y="72" font-family="Georgia, serif" font-size="13" fill="#555">Ryan Cotten | pip-pip | 18 commits | 2026-11-18 to 2026-11-18</text>
   <rect x="36" y="88" width="76" height="60" rx="8" fill="#5da423"/>
   <text x="74" y="132" font-family="Georgia, serif" font-size="42" font-weight="bold" fill="#fff" text-anchor="middle">B</text>
   <text x="128" y="112" font-family="Georgia, serif" font-size="14" font-style="italic" fill="#333">Meets and often exceeds expectations. Keep doing most of this.</text>
-  <text x="128" y="134" font-family="Georgia, serif" font-size="12" fill="#777">Overall score: 81/100</text>
+  <text x="128" y="134" font-family="Georgia, serif" font-size="12" fill="#777">Overall score: 77/100</text>
   <line x1="36" y1="160" x2="644" y2="160" stroke="#222" stroke-width="1"/>
 <text x="36" y="168" font-size="15" font-weight="bold" fill="#222">Communication</text><circle cx="212" cy="163" r="12" fill="#1d9e62"/><text x="212" y="168" font-size="13" font-weight="bold" fill="#fff" text-anchor="middle">A</text><text x="238" y="168" font-size="12" fill="#555">100/100</text>
-<text x="36" y="198" font-size="15" font-weight="bold" fill="#222">Reliability</text><circle cx="212" cy="193" r="12" fill="#1d9e62"/><text x="212" y="198" font-size="13" font-weight="bold" fill="#fff" text-anchor="middle">A</text><text x="238" y="198" font-size="12" fill="#555">100/100</text>
+<text x="36" y="198" font-size="15" font-weight="bold" fill="#222">Reliability</text><circle cx="212" cy="193" r="12" fill="#5da423"/><text x="212" y="198" font-size="13" font-weight="bold" fill="#fff" text-anchor="middle">B</text><text x="238" y="198" font-size="12" fill="#555">78/100</text>
 <text x="36" y="228" font-size="15" font-weight="bold" fill="#222">Follow-through</text><circle cx="212" cy="223" r="12" fill="#e07b24"/><text x="212" y="228" font-size="13" font-weight="bold" fill="#fff" text-anchor="middle">D</text><text x="238" y="228" font-size="12" fill="#555">55/100</text>
 <text x="36" y="258" font-size="15" font-weight="bold" fill="#222">Judgment</text><circle cx="212" cy="253" r="12" fill="#e07b24"/><text x="212" y="258" font-size="13" font-weight="bold" fill="#fff" text-anchor="middle">D</text><text x="238" y="258" font-size="12" fill="#555">52/100</text>
 <text x="36" y="288" font-size="15" font-weight="bold" fill="#222">Consistency</text><circle cx="212" cy="283" r="12" fill="#1d9e62"/><text x="212" y="288" font-size="13" font-weight="bold" fill="#fff" text-anchor="middle">A</text><text x="238" y="288" font-size="12" fill="#555">100/100</text>
-<text x="36" y="324" font-size="12" fill="#333">Awards: Polyglot</text>
-  <text x="340" y="360" font-family="Georgia, serif" font-size="11" fill="#777" text-anchor="middle">Generated locally by PIP from the employee's own git history. pip install on-a-pip</text>
+<text x="36" y="324" font-size="12" fill="#333">Awards: Night Owl, Marathon Day, Polyglot</text><text x="36" y="352" font-size="11" fill="#777">Commits per month</text><rect x="37.0" y="346.0" width="606.0" height="34.0" fill="#8a6d1d"/>
+  <text x="340" y="408" font-family="Georgia, serif" font-size="11" fill="#777" text-anchor="middle">Generated locally by PIP from the employee's own git history. pip install on-a-pip</text>
 </svg>
