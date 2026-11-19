@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pip-pip"
+name = "on-a-pip"
 version = "0.1.0"
 description = "PIP: your AI puts YOU on a Performance Improvement Plan. A local, private review of the programmer, generated from their own git history."
 readme = "README.md"
@@ -25,6 +25,7 @@ Homepage = "https://github.com/littlestjames82-sys/pip-pip"
 Repository = "https://github.com/littlestjames82-sys/pip-pip"
 
 [project.scripts]
+on-a-pip = "pip_pip:main"
 pip-pip = "pip_pip:main"
 
 [tool.setuptools]

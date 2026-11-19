@@ -78,4 +78,4 @@ By continuing to commit, the employee acknowledges receipt of this plan. Appeals
 
 Signed,  
 **Management**  
-*PIP - pip install pip-pip*
+*PIP - pip install on-a-pip*

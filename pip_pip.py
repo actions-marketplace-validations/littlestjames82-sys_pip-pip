@@ -11,9 +11,9 @@ that quietly became permanent.
 
 Pure Python standard library. No dependencies, no accounts, no network.
 
-    pip install pip-pip
-    pip-pip                  # review the top author of the repo in cwd
-    pip-pip ~/some/repo --md review.md --html card.html
+    pip install on-a-pip
+    on-a-pip                  # review the top author of the repo in cwd
+    on-a-pip ~/some/repo --md review.md --html card.html
 """
 
 from __future__ import annotations
@@ -483,7 +483,7 @@ def render_markdown(review: Review) -> str:
     out.append("")
     out.append("Signed,  ")
     out.append("**Management**  ")
-    out.append("*PIP - pip install pip-pip*")
+    out.append("*PIP - pip install on-a-pip*")
     out.append("")
     return "\n".join(out)
 
@@ -526,14 +526,14 @@ def render_html(review: Review) -> str:
   <div class="verdict">"{VERDICTS[review.overall_letter]}"</div></div>
 {rows}
   <div class="foot">Generated locally by PIP from the employee's own git history. Nothing was uploaded.<br>
-  pip install pip-pip</div>
+  pip install on-a-pip</div>
 </div></body></html>
 """
 
 
 def review_to_json(review: Review) -> dict:
     return {
-        "tool": "pip-pip", "version": __version__,
+        "tool": "on-a-pip", "version": __version__,
         "repo": review.repo_name, "author": review.author,
         "review_date": review.review_date.isoformat(),
         "period": [review.span_start.isoformat(), review.span_end.isoformat()],
@@ -553,7 +553,7 @@ def review_to_json(review: Review) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        prog="pip-pip",
+        prog="on-a-pip",
         description="PIP: a formal performance review of the programmer, "
                     "generated locally from their own git history.")
     ap.add_argument("repo", nargs="?", default=".", help="path to a git repository (default: current directory)")
@@ -562,7 +562,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--md", metavar="FILE", help="write the full review as Markdown")
     ap.add_argument("--html", metavar="FILE", help="write the shareable report card as HTML")
     ap.add_argument("--json", action="store_true", help="print the review as JSON instead of the summary")
-    ap.add_argument("--version", action="version", version=f"pip-pip {__version__}")
+    ap.add_argument("--version", action="version", version=f"on-a-pip {__version__}")
     args = ap.parse_args(argv)
 
     repo = os.path.abspath(args.repo)
@@ -580,10 +580,10 @@ def main(argv: list[str] | None = None) -> int:
         markers = collect_markers(repo)
         review = analyze(repo, commits, markers, args.author, date.today())
     except PipError as e:
-        print(f"pip-pip: {e}", file=sys.stderr)
+        print(f"on-a-pip: {e}", file=sys.stderr)
         return 2
     except FileNotFoundError:
-        print("pip-pip: git was not found on this machine", file=sys.stderr)
+        print("on-a-pip: git was not found on this machine", file=sys.stderr)
         return 2
 
     if args.json:

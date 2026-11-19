@@ -5,13 +5,13 @@ Every AI tool reviews your code. **PIP reviews the programmer.**
 Every developer keeps a work diary without knowing it: their git history. Every change is in there, with a timestamp and a little note that was supposed to explain it. PIP reads that record, locally, on your own machine, and issues a formal manager-style performance review. With evidence.
 
 ```
-pip install pip-pip
+pip install on-a-pip
 ```
 
 Then, inside any git repository:
 
 ```
-pip-pip
+on-a-pip
 ```
 
 ```
@@ -43,9 +43,9 @@ Then it does what any good PIP does: it writes you a **30-day improvement plan**
 ## Outputs
 
 ```
-pip-pip ~/some/repo --md review.md --html card.html
-pip-pip --author "your name"     # review one author (default: the most prolific)
-pip-pip --json                   # machine-readable review
+on-a-pip ~/some/repo --md review.md --html card.html
+on-a-pip --author "your name"     # review one author (default: the most prolific)
+on-a-pip --json                   # machine-readable review
 ```
 
 - The terminal summary above.
@@ -65,7 +65,7 @@ PIP runs `git log`, `git grep` and `git blame` on your machine and nothing else.
 
 ## Honest notes
 
-- The package you install is `pip-pip`, because the name `pip` was, understandably, already taken by pip. The second pip reviews the first pip's user.
+- The package is called `on-a-pip` because PyPI rejected `pip-pip` as too similar to `pip` itself, which is fair: you do not get to out-pip pip. The tool was going to be `pip install pip-pip`. Now you install the news that you are on one.
 - Grades are deterministic: same history, same review. The formulas are plain arithmetic in one file, `pip_pip.py`, if you want to argue with them.
 - PIP reviews the most prolific author in the repo by default. Use `--author` in shared repos.
 
