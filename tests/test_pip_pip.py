@@ -945,6 +945,11 @@ class V10FeaturesTest(unittest.TestCase):
         self.assertAlmostEqual(review.highlights["squash_ratio"], 0.6)
         self.assertIn("Authorship note", pip_pip.render_markdown(review))
 
+    def test_clone_label_handles_windows_paths(self):
+        self.assertEqual(pip_pip.clone_label(r"file://C:\Users\dev\AppData\origin"), "origin")
+        self.assertEqual(pip_pip.clone_label("file:///home/dev/origin"), "origin")
+        self.assertEqual(pip_pip.clone_label("https://github.com/psf/requests.git"), "requests")
+
     def test_share_card_and_csv(self):
         ProfessionalDevTest.setUpClass()
         review = review_of(ProfessionalDevTest.repo)

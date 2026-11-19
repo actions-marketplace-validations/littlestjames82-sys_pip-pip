@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -74,7 +74,8 @@ def expand_clone_url(arg: str) -> str:
 
 def clone_label(url: str) -> str:
     name = url.rstrip("/").removesuffix(".git")
-    name = name.split("/")[-1].split(":")[-1]
+    # Normalize Windows separators so file://C:\path\repo labels as "repo".
+    name = name.replace("\\", "/").split("/")[-1].split(":")[-1]
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", name) or "repo"
 
 
