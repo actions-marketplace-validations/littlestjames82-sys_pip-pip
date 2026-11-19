@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -368,18 +368,18 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
             author_filter: str | None, today: date,
             file_totals: dict[str, tuple[int, int, int]] | None = None,
             persona: str = "corporate") -> Review:
-    # Pick the employee: explicit filter, else the most prolific author.
-    by_author: dict[str, list[Commit]] = {}
-    for c in commits_in:
-        by_author.setdefault(c.author, []).append(c)
+    # Pick the employee: explicit filter, else the most prolific identity.
+    # Identities group by email: one person under two names is one employee.
+    groups = _author_groups(commits_in)
     if author_filter:
-        matches = {a: cs for a, cs in by_author.items()
-                   if author_filter.lower() in a.lower()}
+        f = author_filter.lower()
+        matches = [(a, cs) for a, cs, _k in groups
+                   if f in a.lower() or any(f in (c.email or "").lower() for c in cs)]
         if not matches:
             raise PipError(f"no commits found for author matching '{author_filter}'")
-        author, commits = max(matches.items(), key=lambda kv: len(kv[1]))
+        author, commits = max(matches, key=lambda kv: len(kv[1]))
     else:
-        author, commits = max(by_author.items(), key=lambda kv: len(kv[1]))
+        author, commits, _k = max(groups, key=lambda kv: len(kv[1]))
     commits = sorted(commits, key=lambda c: c.when)
     total = len(commits)
     if total == 0:
@@ -501,6 +501,39 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
             nemesis, (na, nd, _nc) = max(author_files.items(), key=lambda kv: kv[1][0] + kv[1][1])
             nemesis_churn = na + nd
 
+    # --- career stats -----------------------------------------------------
+    from collections import Counter
+    day_counts = Counter(c.when.date() for c in commits)
+    busiest_day, busiest_count = (None, 0)
+    if day_counts:
+        busiest_day, busiest_count = max(day_counts.items(), key=lambda kv: kv[1])
+    month_counts = Counter(c.when.strftime("%Y-%m") for c in commits)
+    months_sorted = sorted(month_counts.items())
+    LANG_NAMES = {"py": "Python", "js": "JavaScript", "ts": "TypeScript", "tsx": "TypeScript",
+                  "jsx": "JavaScript", "rs": "Rust", "go": "Go", "java": "Java", "c": "C",
+                  "h": "C", "cpp": "C++", "rb": "Ruby", "php": "PHP", "html": "HTML",
+                  "css": "CSS", "sh": "Shell", "md": "Markdown", "swift": "Swift",
+                  "kt": "Kotlin", "lua": "Lua", "sql": "SQL", "yml": "YAML", "yaml": "YAML"}
+    lang_churn: dict[str, int] = {}
+    if file_totals:
+        for path, (fa, fd, _fc) in file_totals.items():
+            base = path.rsplit("/", 1)[-1]
+            if "." not in base:
+                continue
+            ext = base.rsplit(".", 1)[-1].lower()
+            name = LANG_NAMES.get(ext, ext)
+            lang_churn[name] = lang_churn.get(name, 0) + fa + fd
+    languages = sorted(lang_churn.items(), key=lambda kv: -kv[1])
+    max_deleted_single = max((c.deleted for c in commits), default=0)
+    # Phoenix: a 90+ day silence followed by 10+ commits within 30 days.
+    phoenix = False
+    for prev, cur in zip(active_days, active_days[1:]):
+        if (cur - prev).days >= 90:
+            comeback = [c for c in commits if cur <= c.when.date() <= cur + timedelta(days=30)]
+            if len(comeback) >= 10:
+                phoenix = True
+                break
+
     highlights: dict[str, object] = {
         "night_commits": len(night), "friday_late": len(friday_late),
         "reverts": len(reverts), "fixes": len(fixes), "vague": len(vague),
@@ -514,6 +547,11 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
         "nemesis_file": nemesis, "nemesis_churn": nemesis_churn,
         "biggest_commit_lines": (biggest.added + biggest.deleted) if biggest else 0,
         "biggest_commit_subject": biggest.subject if biggest else "",
+        "busiest_day": busiest_day.isoformat() if busiest_day else None,
+        "busiest_day_count": busiest_count,
+        "months": [[m, n] for m, n in months_sorted],
+        "languages": [[name, churn] for name, churn in languages[:6]],
+        "max_deleted_single": max_deleted_single,
     }
 
     # --- awards: the part people actually post --------------------------
@@ -542,6 +580,16 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
         awards.append(("Colourful Commentator", f"{len(swears)} commit messages contain profanity. Honest, if not exactly handbook language."))
     if len(weekend) / total >= 0.3 and total >= 10:
         awards.append(("Weekend Warrior", f"{len(weekend) / total:.0%} of commits landed on a Saturday or Sunday. The roadmap thanks you. The weekend does not."))
+    if busiest_count >= 15:
+        awards.append(("Marathon Day", f"{busiest_count} commits in a single day ({busiest_day}). Somewhere in there was a lunch break. Probably."))
+    if max_deleted_single >= 1000:
+        awards.append(("The Purge", f"One commit deleted {max_deleted_single:,} lines. Witnesses described the diff as 'mostly red'."))
+    if len([1 for _n, ch in languages if ch >= 20]) >= 5:
+        awards.append(("Polyglot", f"Meaningful churn in {len(languages)} languages. Jack of all trades, suspect in all of them."))
+    if span_days >= 1095:
+        awards.append(("Old Faithful", f"Commits spanning {span_days // 365} years on the same codebase. It has outlived three roadmaps and a rebrand."))
+    if phoenix:
+        awards.append(("Phoenix", "Vanished for a season, then came back swinging. The comeback commits outnumber the goodbye ones, because there were no goodbye ones."))
 
     return Review(
         repo_name=os.path.basename(os.path.abspath(repo)) or repo,
@@ -555,20 +603,38 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
     )
 
 
+def _author_groups(commits_in: list[Commit]) -> list[tuple[str, list[Commit], str]]:
+    """Group commits by identity: same email is the same person, whatever
+    name they committed under. Returns (display name, commits, identity key)
+    where the key is the email when there is one, else the name."""
+    groups: dict[str, list[Commit]] = {}
+    for c in commits_in:
+        key = (c.email or "").strip().lower() or f"name:{c.author.strip().lower()}"
+        groups.setdefault(key, []).append(c)
+    result: list[tuple[str, list[Commit], str]] = []
+    for key, cs in groups.items():
+        names: dict[str, int] = {}
+        for c in cs:
+            names[c.author] = names.get(c.author, 0) + 1
+        result.append((max(names.items(), key=lambda kv: kv[1])[0], cs, key))
+    return result
+
+
 def leaderboard(repo: str, commits_in: list[Commit], markers: list[Marker],
                 today: date, file_totals=None, persona: str = "corporate",
                 min_commits: int = 5, top: int = 8) -> list[Review]:
     """Review every author in the repo and rank them. The office feature."""
-    authors: dict[str, int] = {}
-    for c in commits_in:
-        authors[c.author] = authors.get(c.author, 0) + 1
-    ranked = sorted(authors.items(), key=lambda kv: -kv[1])
+    ranked = sorted(((name, len(cs), key) for name, cs, key in _author_groups(commits_in)),
+                    key=lambda kv: -kv[1])
     reviews: list[Review] = []
-    for name, count in ranked[:top]:
+    for name, count, key in ranked[:top]:
         if count < min_commits:
             continue
+        # Target the exact identity: by email when the key is one, so two
+        # people who share a display name never collapse into one row.
+        target = key if "@" in key else name
         try:
-            reviews.append(analyze(repo, commits_in, markers, name, today,
+            reviews.append(analyze(repo, commits_in, markers, target, today,
                                    file_totals=file_totals, persona=persona))
         except PipError:
             continue
@@ -643,6 +709,17 @@ def render_terminal(review: Review, previous: dict | None = None) -> str:
         lines.append("  AWARDS")
         for title, reason in review.awards:
             lines.append(f"  * {title} - {reason}")
+    months = review.highlights.get("months") or []
+    if months:
+        counts = [n for _m, n in months][-24:]
+        blocks = " ▁▂▃▄▅▆▇█"
+        top = max(counts) or 1
+        spark = "".join(blocks[max(0, min(8, round(n / top * 8)))] for n in counts)
+        lines.append("")
+        lines.append(f"  Activity (monthly commits): {spark}")
+        if review.highlights.get("busiest_day"):
+            lines.append(f"  Busiest day: {review.highlights['busiest_day']} "
+                         f"({review.highlights['busiest_day_count']} commits)")
     lines.append("")
     lines.append("  This review was generated locally from your own git history.")
     lines.append("  Nothing left this machine. Management has seen enough anyway.")
@@ -687,6 +764,11 @@ def render_markdown(review: Review) -> str:
     if h.get("biggest_commit_subject"):
         out.append(f"- **Largest single commit:** {int(h['biggest_commit_lines']):,} lines changed in \"{h['biggest_commit_subject']}\". A bold unit of work.")
     out.append(f"- **Weekend work:** {h['weekend_commits']} of {review.total_commits} commits landed on a Saturday or Sunday.")
+    if h.get("busiest_day"):
+        out.append(f"- **Busiest day:** {h['busiest_day']}, with {h['busiest_day_count']} commits.")
+    if h.get("languages"):
+        langs = ", ".join(f"{name} ({int(churn):,} lines of churn)" for name, churn in h["languages"][:4])
+        out.append(f"- **Languages by churn:** {langs}.")
     out.append(f"- **Net lines:** {int(h['added']):,} added, {int(h['deleted']):,} deleted.")
     if int(h.get("swears", 0)) > 0:
         out.append(f"- **Language:** {h['swears']} commit messages contain profanity. The record reflects the journey.")
@@ -851,6 +933,45 @@ def review_to_json(review: Review) -> dict:
     }
 
 
+REFERENCE_OPENERS = {
+    "A": "It is a genuine pleasure to recommend {author}. In {total} commits on {repo} "
+         "between {start} and {end}, they produced the kind of record managers frame. "
+         "{best} was a particular strength. Hire them before someone else reads this file.",
+    "B": "I am glad to recommend {author}. Across {total} commits on {repo}, the record is "
+         "strong and steady, with {best} standing out. Any team would be better for having "
+         "this history pointed at their problems.",
+    "C": "I am writing in reference to {author}, who committed {total} times to {repo} "
+         "between {start} and {end}. The record is mixed in the way real records are: "
+         "{best} was solid, and the rest is documented in a formal improvement plan, "
+         "which they have received. Growth is a trajectory, and theirs points up.",
+    "D": "To whom it may concern: {author} was, verifiably, present for {total} commits "
+         "on {repo}. Their strongest category was {best}. A full performance review is "
+         "available and has been shared with the employee. We wish them well in their "
+         "30-day plan, and we mean that in every sense it can be taken.",
+    "F": "To whom it may concern: {author} committed to {repo} {total} times. "
+         "Attendance, in the narrowest technical sense, occurred. Their best category "
+         "was {best}, and this letter has been kept brief out of a shared interest "
+         "in honesty. A formal improvement plan is in effect.",
+}
+
+
+def render_reference(review: Review) -> str:
+    best = max(review.categories, key=lambda c: c.score)
+    body = REFERENCE_OPENERS[review.overall_letter].format(
+        author=review.author, total=review.total_commits, repo=review.repo_name,
+        start=review.span_start.isoformat(), end=review.span_end.isoformat(),
+        best=best.name)
+    persona_label = PERSONAS.get(review.persona, PERSONAS["corporate"])["label"]  # type: ignore[attr-defined]
+    return (
+        f"# Letter of reference: {review.author}\n\n"
+        f"{review.review_date.isoformat()}\n\n"
+        f"{body}\n\n"
+        f"Overall grade on the record: {review.overall_letter} ({review.overall_score:.0f}/100).\n\n"
+        f"Signed,\nManagement ({persona_label})\n"
+        f"*Generated by PIP from the employee's own git history. pip install on-a-pip*\n"
+    )
+
+
 # --------------------------------------------------------------------------
 # progress tracking (local only, like everything else here)
 # --------------------------------------------------------------------------
@@ -901,6 +1022,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--author", help="review only commits by authors matching this text (default: most prolific author)")
     ap.add_argument("--max-commits", type=int, default=10000, help="cap on commits examined (default 10000)")
     ap.add_argument("--days", type=int, help="review only the last N days of history (anchored at the most recent commit)")
+    ap.add_argument("--since", metavar="YYYY-MM-DD", help="review only commits on or after this date")
+    ap.add_argument("--until", metavar="YYYY-MM-DD", help="review only commits on or before this date")
+    ap.add_argument("--reference", metavar="FILE", help="also write a letter of reference based on the grade")
     ap.add_argument("--persona", choices=sorted(PERSONAS), default="corporate",
                     help="the reviewing manager's style (default: corporate)")
     ap.add_argument("--leaderboard", action="store_true",
@@ -944,6 +1068,13 @@ def main(argv: list[str] | None = None) -> int:
         if not commits:
             raise PipError("this repository has no commits yet. Management cannot review potential.")
         commits = scope_commits(commits, args.days)
+        if args.since or args.until:
+            try:
+                lo = date.fromisoformat(args.since) if args.since else date.min
+                hi = date.fromisoformat(args.until) if args.until else date.max
+            except ValueError:
+                raise PipError("--since and --until take dates like 2026-01-31")
+            commits = [c for c in commits if lo <= c.when.date() <= hi]
         if not commits:
             raise PipError("no commits in the requested period. Management cannot review a rumor.")
         stats, file_totals = collect_numstat(repo, {c.sha for c in commits})
@@ -993,6 +1124,10 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.badge, "w", encoding="utf-8") as f:
             f.write(render_badge(review))
         print(f"Badge written to {args.badge}")
+    if args.reference:
+        with open(args.reference, "w", encoding="utf-8") as f:
+            f.write(render_reference(review))
+        print(f"Reference letter written to {args.reference}")
     if review.total_commits < 10:
         print("Note: fewer than 10 commits reviewed. Management is extrapolating, "
               "the way management does.", file=sys.stderr)

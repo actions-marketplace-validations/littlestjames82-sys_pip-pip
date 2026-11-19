@@ -33,7 +33,7 @@ def make_repo(path):
     _run(path, "config", "commit.gpgsign", "false")
 
 
-def commit(repo, when, subject, body="", files=None, append=None, author=None):
+def commit(repo, when, subject, body="", files=None, append=None, author=None, remove=None):
     if files:
         for name, content in files.items():
             fp = os.path.join(repo, name)
@@ -44,11 +44,18 @@ def commit(repo, when, subject, body="", files=None, append=None, author=None):
         for name, content in append.items():
             with open(os.path.join(repo, name), "a") as f:
                 f.write(content)
+    if remove:
+        for name in remove:
+            os.remove(os.path.join(repo, name))
     _run(repo, "add", "-A")
     iso = when.isoformat()
     env = {"GIT_AUTHOR_DATE": iso, "GIT_COMMITTER_DATE": iso}
     if author:
-        env["GIT_AUTHOR_NAME"] = author
+        if "<" in author and author.endswith(">"):
+            env["GIT_AUTHOR_NAME"] = author.split("<")[0].strip()
+            env["GIT_AUTHOR_EMAIL"] = author.split("<")[1][:-1].strip()
+        else:
+            env["GIT_AUTHOR_NAME"] = author
     args = ["commit", "-q", "-m", subject]
     if body:
         args += ["-m", body]
@@ -205,7 +212,7 @@ class V2FeaturesTest(unittest.TestCase):
                 "refactor session cache into its own module"]):
             commit(cls.repo, at(30 - i * 5, 11), subject,
                    body="Context and reasoning for the next reader.",
-                   author="Tidy Example",
+                   author="Tidy Example <tidy@example.com>",
                    files={f"tidy{i}.py": f"# tidy {i}\n"} if i == 0 else None,
                    append={"tidy0.py": f"# more {i}\n"} if i > 0 else None)
         cls.review = review_of(cls.repo)
@@ -293,3 +300,96 @@ class CloneTargetTest(unittest.TestCase):
     def test_clone_missing_repo_is_a_clean_error(self):
         with self.assertRaises(pip_pip.PipError):
             pip_pip.clone_repo("file:///nonexistent/definitely-not-here.git")
+
+
+class V4FeaturesTest(unittest.TestCase):
+    def test_identity_grouping_by_email(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "ids")
+        make_repo(repo)
+        for i in range(3):
+            commit(repo, at(60 - i * 10, 10), f"solid piece of work number {i} with detail",
+                   author="Sam Dev <sam@example.com>",
+                   files={"s.py": f"# {i}\n"} if i == 0 else None,
+                   append={"s.py": f"# more {i}\n"} if i > 0 else None)
+        for i in range(2):
+            commit(repo, at(35 - i * 10, 10), f"another explained change {i} for the record",
+                   author="Samuel Dev <sam@example.com>",
+                   append={"s.py": f"# alt {i}\n"})
+        review = review_of(repo)
+        self.assertEqual(review.author, "Sam Dev")       # most-used name wins
+        self.assertEqual(review.total_commits, 5)        # both names merged
+
+    def test_career_stats_and_awards(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "career")
+        make_repo(repo)
+        big = "".join(f"line {i}\n" for i in range(1200))
+        poly = {f"f.{ext}": "".join(f"x{i}\n" for i in range(30))
+                for ext in ("py", "js", "rs", "go", "rb")}
+        commit(repo, at(200, 9), "set up the project skeleton and tooling", files=poly)
+        commit(repo, at(100, 9), "import the legacy data dump for migration", files={"big.py": big})
+        commit(repo, at(99, 9), "remove the legacy data dump after migration", remove=["big.py"])
+        # Marathon day: 15 commits on one day, 20 days ago
+        for i in range(15):
+            commit(repo, at(20, 9, i), f"incremental improvement step {i} to the parser",
+                   append={"f.py": f"# step {i}\n"})
+        review = review_of(repo)
+        titles = [t for t, _ in review.awards]
+        self.assertIn("Marathon Day", titles)
+        self.assertIn("The Purge", titles)
+        self.assertIn("Polyglot", titles)
+        self.assertEqual(review.highlights["busiest_day_count"], 15)
+        self.assertEqual(review.highlights["max_deleted_single"], 1200)
+        langs = [name for name, _ in review.highlights["languages"]]
+        self.assertIn("Python", langs)
+        self.assertIn("Rust", langs)
+
+    def test_reference_letter(self):
+        review = review_of("/tmp/pip-sample")
+        letter = pip_pip.render_reference(review)
+        self.assertIn("Letter of reference", letter)
+        self.assertIn(review.author, letter)
+        self.assertIn(review.overall_letter, letter)
+
+    def test_since_until_via_main(self):
+        import contextlib
+        import io
+        import json as jsonlib
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "window")
+        make_repo(repo)
+        commit(repo, at(100, 10), "an old commit from long ago with words", files={"a.py": "x\n"})
+        commit(repo, at(10, 10), "a recent commit with a proper message", append={"a.py": "y\n"})
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = pip_pip.main([repo, "--since", (date.today() - timedelta(days=30)).isoformat(), "--json"])
+        self.assertEqual(rc, 0)
+        data = jsonlib.loads(buf.getvalue())
+        self.assertEqual(data["total_commits"], 1)
+
+
+class LeaderboardIdentityTest(unittest.TestCase):
+    def test_same_name_different_people_stay_separate(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "twopats")
+        make_repo(repo)
+        for i in range(3):
+            commit(repo, at(50 - i * 5, 10), f"documented change number {i} with context",
+                   author="Pat Dev <pat1@example.com>",
+                   files={"p.py": f"# {i}\n"} if i == 0 else None,
+                   append={"p.py": f"# a{i}\n"} if i > 0 else None)
+        for i in range(4):
+            commit(repo, at(40 - i * 5, 10), f"explained improvement number {i} for readers",
+                   author="Pat Dev <pat2@example.com>",
+                   append={"p.py": f"# b{i}\n"})
+        commits = pip_pip.collect_commits(repo, 10000)
+        stats, file_totals = pip_pip.collect_numstat(repo, {c.sha for c in commits})
+        for c in commits:
+            if c.sha in stats:
+                c.added, c.deleted, c.files = stats[c.sha]
+        markers = pip_pip.collect_markers(repo)
+        board = pip_pip.leaderboard(repo, commits, markers, date.today(),
+                                    file_totals=file_totals, min_commits=3)
+        self.assertEqual(len(board), 2)
+        self.assertEqual(sorted(r.total_commits for r in board), [3, 4])

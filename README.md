@@ -60,6 +60,7 @@ Grades are the paperwork. Awards are the part people post. PIP reads your habits
 - **The Ghost** - a 60+ day disappearance, then a casual return
 - **Fossil Keeper** - a TODO old enough to qualify for the pension plan
 - **Surgeon**, **Streak Keeper**, **Open Book**, **Strong Silent Type**, **Chaos Agent**, **Weekend Warrior**, **Colourful Commentator**
+- **Marathon Day** (15+ commits in one day), **The Purge** (a single commit deleting 1,000+ lines), **Polyglot** (real churn in 5+ languages), **Old Faithful** (3+ years on one codebase), **Phoenix** (a long disappearance followed by a genuine comeback)
 
 It also names your **nemesis file** (the one with the most churn in your history) and your largest single commit, because management did the reading.
 
@@ -80,6 +81,8 @@ The evidence never changes. The tone absolutely does.
 on-a-pip ~/some/repo --md review.md --html card.html --svg card.svg --badge badge.svg
 on-a-pip --author "your name"     # review one author (default: the most prolific)
 on-a-pip --days 90                # just the last 90 days of history
+on-a-pip --since 2026-01-01 --until 2026-03-31   # or a calendar window
+on-a-pip --reference letter.md    # also write a letter of reference, based on the grade
 on-a-pip --leaderboard            # review every author in the repo and rank them
 on-a-pip psf/requests               # or skip the local part entirely: any public repo by URL
 on-a-pip --json                   # machine-readable review
@@ -89,6 +92,8 @@ on-a-pip --json                   # machine-readable review
 - A full formal review in Markdown: per-category evidence, management notes, additional findings, awards, the plan, the sign-off.
 - Shareable **report cards** in HTML and **SVG** (the SVG embeds straight into a README), plus a small **grade badge** for your profile.
 - A **leaderboard mode** for shared repos. Run it on your team. We accept no responsibility for the standup that follows.
+- A **letter of reference** (`--reference`), written by management in the tone your grade deserves. A grades get a glowing letter. F grades get a short one.
+- Career stats in every review: busiest day ever, monthly activity sparkline, languages ranked by churn. Identities are grouped by email, so one person under two names is one employee, and two people sharing a name stay two rows.
 
 Sample outputs live in [`examples/`](examples/): a full sample review, sample report cards, a badge, and a real report card generated from the Decksmith repository.
 
