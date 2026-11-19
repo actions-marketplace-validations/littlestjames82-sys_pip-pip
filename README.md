@@ -14,6 +14,16 @@ Then, inside any git repository:
 on-a-pip
 ```
 
+Or review somebody else's, straight from the internet:
+
+```
+on-a-pip psf/requests                      # GitHub shorthand
+on-a-pip https://github.com/psf/requests    # any git URL
+on-a-pip psf/requests --leaderboard        # rank the whole team
+```
+
+PIP clones the repo into a temp folder, reviews it, and deletes the clone when it is done (`--keep` keeps it, `--shallow 500` fetches only recent history on huge repos). Reviewing a famous project is an education: the creator of Requests, 3,148 commits deep, grades out at a D with a Night Owl award. The record is the record.
+
 ```
   PERFORMANCE IMPROVEMENT PLAN  -  Dev Example
   pip-sample  |  8 commits reviewed  |  2025-10-14 to 2026-11-08
@@ -71,6 +81,7 @@ on-a-pip ~/some/repo --md review.md --html card.html --svg card.svg --badge badg
 on-a-pip --author "your name"     # review one author (default: the most prolific)
 on-a-pip --days 90                # just the last 90 days of history
 on-a-pip --leaderboard            # review every author in the repo and rank them
+on-a-pip psf/requests               # or skip the local part entirely: any public repo by URL
 on-a-pip --json                   # machine-readable review
 ```
 

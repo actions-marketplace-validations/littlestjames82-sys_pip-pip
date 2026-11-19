@@ -252,3 +252,44 @@ class V2FeaturesTest(unittest.TestCase):
         self.assertEqual(board[0].author, "Tidy Example")
         text = pip_pip.render_leaderboard(board, "v2")
         self.assertIn("LEADERBOARD", text)
+
+
+class CloneTargetTest(unittest.TestCase):
+    def test_detection(self):
+        self.assertTrue(pip_pip.is_clone_target("https://github.com/psf/requests.git"))
+        self.assertTrue(pip_pip.is_clone_target("git@github.com:psf/requests.git"))
+        self.assertTrue(pip_pip.is_clone_target("psf/requests"))
+        self.assertFalse(pip_pip.is_clone_target("."))
+        self.assertFalse(pip_pip.is_clone_target("./some/path"))
+        self.assertFalse(pip_pip.is_clone_target("/abs/path"))
+
+    def test_expansion_and_label(self):
+        self.assertEqual(pip_pip.expand_clone_url("psf/requests"),
+                         "https://github.com/psf/requests.git")
+        self.assertEqual(pip_pip.expand_clone_url("https://x.dev/a/b.git"),
+                         "https://x.dev/a/b.git")
+        self.assertEqual(pip_pip.clone_label("https://github.com/psf/requests.git"), "requests")
+        self.assertEqual(pip_pip.clone_label("git@github.com:psf/requests.git"), "requests")
+
+    def test_clone_via_file_url_and_review(self):
+        tmp = tempfile.mkdtemp()
+        src = os.path.join(tmp, "origin")
+        make_repo(src)
+        commit(src, at(30, 10), "a perfectly reasonable commit message here",
+               files={"a.py": "print(1)\n"})
+        commit(src, at(20, 11), "another reasonable commit with detail",
+               body="Explains the change for the next reader.",
+               append={"a.py": "print(2)\n"})
+        dest, root = pip_pip.clone_repo(f"file://{src}")
+        try:
+            self.assertTrue(os.path.isdir(os.path.join(dest, ".git")))
+            review = review_of(dest)
+            self.assertEqual(review.total_commits, 2)
+            self.assertEqual(review.repo_name, "origin")
+        finally:
+            import shutil
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_clone_missing_repo_is_a_clean_error(self):
+        with self.assertRaises(pip_pip.PipError):
+            pip_pip.clone_repo("file:///nonexistent/definitely-not-here.git")

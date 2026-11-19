@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -50,6 +50,52 @@ def _git(repo: str, args: list[str], check: bool = True) -> str:
 
 class PipError(Exception):
     pass
+
+
+_SHORTHAND_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+
+
+def is_clone_target(arg: str) -> bool:
+    """True when the positional argument names a remote repo, not a local path:
+    a URL (https/git@/ssh/file) or a GitHub shorthand like 'psf/requests'
+    that does not exist locally."""
+    if arg.startswith(("https://", "http://", "git@", "ssh://", "git://", "file://")):
+        return True
+    if os.path.isdir(arg):
+        return False
+    return bool(_SHORTHAND_RE.match(arg)) and not arg.startswith(".")
+
+
+def expand_clone_url(arg: str) -> str:
+    if _SHORTHAND_RE.match(arg) and "://" not in arg and not arg.startswith(("git@", "file:")):
+        return f"https://github.com/{arg.removesuffix('.git')}.git"
+    return arg
+
+
+def clone_label(url: str) -> str:
+    name = url.rstrip("/").removesuffix(".git")
+    name = name.split("/")[-1].split(":")[-1]
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", name) or "repo"
+
+
+def clone_repo(url: str, shallow: int | None = None) -> tuple[str, str]:
+    """Clone into a fresh temp dir. Returns (repo_path, temp_root)."""
+    import shutil
+    import tempfile
+    root = tempfile.mkdtemp(prefix="on-a-pip-")
+    dest = os.path.join(root, clone_label(url))
+    cmd = ["git", "clone", "--quiet"]
+    if shallow:
+        cmd += ["--depth", str(shallow)]
+    cmd += [url, dest]
+    print(f"Cloning {url} ...", file=sys.stderr)
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        shutil.rmtree(root, ignore_errors=True)
+        raise PipError(
+            "could not clone that repository. If it is private or does not exist, "
+            "clone it yourself and pass the local folder instead.")
+    return dest, root
 
 
 @dataclass
@@ -811,7 +857,7 @@ def review_to_json(review: Review) -> dict:
 
 def _progress_path(repo: str) -> str:
     import hashlib
-    key = hashlib.sha1(os.path.abspath(repo).encode()).hexdigest()[:12]
+    key = hashlib.sha1(repo.encode()).hexdigest()[:12]
     base = os.path.join(os.path.expanduser("~"), ".config", "on-a-pip")
     os.makedirs(base, exist_ok=True)
     return os.path.join(base, f"{key}.json")
@@ -846,7 +892,12 @@ def main(argv: list[str] | None = None) -> int:
         prog="on-a-pip",
         description="PIP: a formal performance review of the programmer, "
                     "generated locally from their own git history.")
-    ap.add_argument("repo", nargs="?", default=".", help="path to a git repository (default: current directory)")
+    ap.add_argument("repo", nargs="?", default=".",
+                    help="a git repository path, a git URL, or a GitHub shorthand like psf/requests (default: current directory)")
+    ap.add_argument("--shallow", type=int, metavar="N",
+                    help="with a URL: clone only the last N commits (faster on huge repos; the review covers what was fetched)")
+    ap.add_argument("--keep", action="store_true",
+                    help="with a URL: keep the clone afterwards and print where it is")
     ap.add_argument("--author", help="review only commits by authors matching this text (default: most prolific author)")
     ap.add_argument("--max-commits", type=int, default=10000, help="cap on commits examined (default 10000)")
     ap.add_argument("--days", type=int, help="review only the last N days of history (anchored at the most recent commit)")
@@ -862,7 +913,29 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--version", action="version", version=f"on-a-pip {__version__}")
     args = ap.parse_args(argv)
 
-    repo = os.path.abspath(args.repo)
+    progress_key = args.repo
+    repo_arg = args.repo
+    if is_clone_target(args.repo):
+        import atexit
+        import shutil
+        url = expand_clone_url(args.repo)
+        try:
+            repo_arg, clone_root = clone_repo(url, args.shallow)
+        except PipError as e:
+            print(f"on-a-pip: {e}", file=sys.stderr)
+            return 2
+        except FileNotFoundError:
+            print("on-a-pip: git was not found on this machine", file=sys.stderr)
+            return 2
+        progress_key = url
+        if args.keep:
+            print(f"Clone kept at {repo_arg}", file=sys.stderr)
+        else:
+            atexit.register(shutil.rmtree, clone_root, ignore_errors=True)
+
+    repo = os.path.abspath(repo_arg)
+    if not is_clone_target(args.repo):
+        progress_key = repo
     try:
         inside = _git(repo, ["rev-parse", "--is-inside-work-tree"], check=False).strip()
         if inside != "true":
@@ -898,12 +971,12 @@ def main(argv: list[str] | None = None) -> int:
         print("on-a-pip: git was not found on this machine", file=sys.stderr)
         return 2
 
-    previous = load_previous(repo)
+    previous = load_previous(progress_key)
     if args.json:
         print(json.dumps(review_to_json(review), indent=2, default=str))
     else:
         print(render_terminal(review, previous=previous))
-    save_current(repo, review)
+    save_current(progress_key, review)
     if args.md:
         with open(args.md, "w", encoding="utf-8") as f:
             f.write(render_markdown(review))
