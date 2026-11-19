@@ -3,8 +3,10 @@
 The repos are constructed with exact commit counts, hours, weekdays and
 message quality, so the expected metrics are known answers, not guesses.
 """
+import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -189,6 +191,41 @@ class CliTest(unittest.TestCase):
                 capture_output=True, text=True)
             self.assertEqual(proc.returncode, 2)
             self.assertIn("not a git repository", proc.stderr)
+
+
+class OrgRunTest(unittest.TestCase):
+    """_run_org end to end with the GitHub listing faked to a local repo.
+
+    Regression: v1.1.0 crashed with NameError (tempfile never imported at
+    module level) the first time the flow got past the API call.
+    """
+
+    def test_org_run_reviews_local_repos(self):
+        import types
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        repo = os.path.join(tmp, "demo-src")
+        make_repo(repo)
+        commit(repo, datetime(2026, 1, 5, 10, 0, tzinfo=timezone.utc), "feat: one",
+               files={"a.py": "x = 1\n"})
+        commit(repo, datetime(2026, 1, 6, 10, 0, tzinfo=timezone.utc), "fix: two",
+               files={"a.py": "x = 2\n"})
+        orig = pip_pip.fetch_org_repos
+        pip_pip.fetch_org_repos = lambda org, limit, include_forks: [("demo", repo)]
+        args = types.SimpleNamespace(org="demo-org", org_limit=5, include_forks=False,
+                                     persona=None, max_commits=10000, json=False,
+                                     csv=None)
+        try:
+            import contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = pip_pip._run_org(args)
+        finally:
+            pip_pip.fetch_org_repos = orig
+        self.assertEqual(code, 0)
+        out = buf.getvalue()
+        self.assertIn("demo", out)
+        self.assertIn("Dev Example", out)
 
 
 if __name__ == "__main__":

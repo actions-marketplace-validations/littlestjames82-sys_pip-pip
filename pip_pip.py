@@ -23,12 +23,14 @@ import html
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -81,8 +83,6 @@ def clone_label(url: str) -> str:
 
 def clone_repo(url: str, shallow: int | None = None) -> tuple[str, str]:
     """Clone into a fresh temp dir. Returns (repo_path, temp_root)."""
-    import shutil
-    import tempfile
     root = tempfile.mkdtemp(prefix="on-a-pip-")
     dest = os.path.join(root, clone_label(url))
     cmd = ["git", "clone", "--quiet"]
@@ -507,7 +507,7 @@ def _run_org(args) -> int:
                 for c in commits:
                     if c.sha in stats:
                         c.added, c.deleted, c.files = stats[c.sha]
-                        c.paths = tuple(paths_by_sha.get(c.sha, ()))
+                    c.paths = tuple(paths_by_sha.get(c.sha, ()))
                 markers = collect_markers(dest)
                 review = analyze(dest, commits, markers, None, date.today(),
                                  file_totals=file_totals, persona=persona)
@@ -1824,7 +1824,6 @@ def main(argv: list[str] | None = None) -> int:
     clone_root = None
     if is_clone_target(args.repo):
         import atexit
-        import shutil
         url = expand_clone_url(args.repo)
         try:
             repo_arg, clone_root = clone_repo(url, args.shallow)

@@ -1,5 +1,10 @@
 # PIP: your git history just put you on a Performance Improvement Plan
 
+[![PyPI](https://img.shields.io/pypi/v/on-a-pip)](https://pypi.org/project/on-a-pip/)
+[![Tests](https://github.com/littlestjames82-sys/pip-pip/actions/workflows/tests.yml/badge.svg)](https://github.com/littlestjames82-sys/pip-pip/actions/workflows/tests.yml)
+[![Python](https://img.shields.io/pypi/pyversions/on-a-pip)](https://pypi.org/project/on-a-pip/)
+[![License: MIT](https://img.shields.io/github/license/littlestjames82-sys/pip-pip)](LICENSE)
+
 Every tool reviews your code. **PIP reviews the programmer.**
 
 ![PIP in action: install, run, verdict](examples/demo.gif)
@@ -131,7 +136,7 @@ on-a-pip --json                   # machine-readable review
 - **File reviews** (`--blame`): one file, every commit that ever touched it, formally reviewed.
 - **Repo config:** a `.pip.toml` in the repo root can set `persona` and `fail_below` once for the whole team; the command line still wins.
 - 21 awards now, including The Archaeologist (revives files untouched for a year), Merge Goblin, Lone Wolf, and Rubber Duck (commit bodies longer than some READMEs).
-- **Org boards** (`--org`): point PIP at any GitHub user and get one ranked board across their public repos, with an Org MVP.
+- **Org boards** (`--org`): point PIP at any GitHub user and get one ranked board across their public repos, with an Org MVP. Each repo is cloned in turn, so large repositories take a while; `--org-limit` keeps it quick.
 - **Fair records by default:** bot authors (dependabot and friends) are excluded unless you ask for them with `--include-bots`; Co-authored-by trailers earn shared credit; lockfiles and minified files do not count as churn; squash-merge-heavy histories carry an authorship note saying the grade belongs to whoever pressed the merge button.
 - **Boards export:** `--csv` prints leaderboard, scan, and org boards as CSV; `--json` covers every mode.
 - **Pair stats:** the leaderboard now names the pair most in sync, ranked by shared active days.
@@ -225,7 +230,7 @@ MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).
 
 ![PIP report card](pip-card.svg)
 
-**Grade: B (76/100)** · 23 commits reviewed · Top award: Night Owl · Reviewed 2026-11-19
+**Grade: B (81/100)** · 9 commits reviewed · Top award: Polyglot · Reviewed 2026-11-18
 
 *This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) (`on-a-pip --readme`). The record speaks for itself.*
 <!-- pip:end -->

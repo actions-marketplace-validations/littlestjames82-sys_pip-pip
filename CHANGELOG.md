@@ -3,6 +3,17 @@
 All notable changes to PIP (PyPI: `on-a-pip`) are recorded here. Versions are
 the tool's own; the record is the record.
 
+## 1.1.1
+
+- Org mode repaired: `--org` crashed with a NameError once it got past the
+  GitHub listing step (two imports lived only inside other functions). It
+  now runs end to end, verified live, with a regression test that drives
+  the whole org flow against a local repository.
+- Org reviews now record file paths for every commit, not just the ones
+  with line counts, so path-based awards score the same as in a local
+  review.
+- README badges: PyPI version, test status, supported Pythons, license.
+
 ## 1.1.0: The Fuller File
 
 - Progress line on stderr for large histories (2,000+ commits), so a big
