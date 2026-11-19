@@ -1,0 +1,41 @@
+name: self-review
+
+# PIP reviews this repository's own history and commits the refreshed card.
+# The tool, reviewing itself, in public.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: self-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    if: ${{ !contains(github.event.head_commit.message, 'Update PIP review card') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Review ourselves
+        run: python pip_pip.py . --readme
+      - name: Commit the updated card
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md pip-card.svg pip-badge.svg
+          if git diff --cached --quiet; then
+            echo "Review unchanged."
+          else
+            git commit -m "Update PIP review card"
+            git push
+          fi

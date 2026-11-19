@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -955,6 +955,53 @@ REFERENCE_OPENERS = {
 }
 
 
+README_START = "<!-- pip:start -->"
+README_END = "<!-- pip:end -->"
+
+
+def render_readme_section(review: Review, card_file: str = "pip-card.svg",
+                          badge_file: str = "pip-badge.svg") -> str:
+    award = review.awards[0][0] if review.awards else "None yet"
+    return (
+        f"{README_START}\n"
+        f"## My PIP review\n\n"
+        f"![My PIP grade]({badge_file})\n\n"
+        f"![PIP report card]({card_file})\n\n"
+        f"**Grade: {review.overall_letter} ({review.overall_score:.0f}/100)** · "
+        f"{review.total_commits} commits reviewed · Top award: {award} · "
+        f"Reviewed {review.review_date.isoformat()}\n\n"
+        f"*This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) "
+        f"(`on-a-pip --readme`). The record speaks for itself.*\n"
+        f"{README_END}"
+    )
+
+
+def update_readme(repo: str, review: Review) -> tuple[str, str, str]:
+    """Write the card and badge into the repo and insert or refresh the
+    marked PIP section in its README. Returns (readme, card, badge) paths."""
+    readme = os.path.join(repo, "README.md")
+    if not os.path.isfile(readme):
+        raise PipError("no README.md in this repository to write the review into")
+    card = os.path.join(repo, "pip-card.svg")
+    badge = os.path.join(repo, "pip-badge.svg")
+    with open(card, "w", encoding="utf-8") as f:
+        f.write(render_svg(review))
+    with open(badge, "w", encoding="utf-8") as f:
+        f.write(render_badge(review))
+    section = render_readme_section(review)
+    with open(readme, encoding="utf-8") as f:
+        text = f.read()
+    if README_START in text and README_END in text:
+        head, rest = text.split(README_START, 1)
+        _old, tail = rest.split(README_END, 1)
+        text = head.rstrip() + "\n\n" + section + tail
+    else:
+        text = text.rstrip() + "\n\n" + section + "\n"
+    with open(readme, "w", encoding="utf-8") as f:
+        f.write(text)
+    return readme, card, badge
+
+
 def render_reference(review: Review) -> str:
     best = max(review.categories, key=lambda c: c.score)
     body = REFERENCE_OPENERS[review.overall_letter].format(
@@ -1025,6 +1072,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--since", metavar="YYYY-MM-DD", help="review only commits on or after this date")
     ap.add_argument("--until", metavar="YYYY-MM-DD", help="review only commits on or before this date")
     ap.add_argument("--reference", metavar="FILE", help="also write a letter of reference based on the grade")
+    ap.add_argument("--readme", action="store_true",
+                    help="write pip-card.svg and pip-badge.svg into the repo and add or refresh the PIP section in its README")
     ap.add_argument("--persona", choices=sorted(PERSONAS), default="corporate",
                     help="the reviewing manager's style (default: corporate)")
     ap.add_argument("--leaderboard", action="store_true",
@@ -1039,6 +1088,7 @@ def main(argv: list[str] | None = None) -> int:
 
     progress_key = args.repo
     repo_arg = args.repo
+    clone_root = None
     if is_clone_target(args.repo):
         import atexit
         import shutil
@@ -1128,6 +1178,17 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.reference, "w", encoding="utf-8") as f:
             f.write(render_reference(review))
         print(f"Reference letter written to {args.reference}")
+    if args.readme:
+        try:
+            readme_path, card_path, badge_path = update_readme(repo, review)
+        except PipError as e:
+            print(f"on-a-pip: {e}", file=sys.stderr)
+            return 2
+        print(f"README review section updated in {readme_path}")
+        print(f"Card and badge written to {card_path} and {badge_path}")
+        if clone_root and not args.keep:
+            print("Note: that was a temporary clone, so the README changes went with it. "
+                  "Re-run with --keep, or run --readme inside your own checkout.", file=sys.stderr)
     if review.total_commits < 10:
         print("Note: fewer than 10 commits reviewed. Management is extrapolating, "
               "the way management does.", file=sys.stderr)

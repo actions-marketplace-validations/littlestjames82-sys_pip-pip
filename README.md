@@ -97,6 +97,35 @@ on-a-pip --json                   # machine-readable review
 
 Sample outputs live in [`examples/`](examples/): a full sample review, sample report cards, a badge, and a real report card generated from the Decksmith repository.
 
+## Wear your grade
+
+```
+on-a-pip --readme
+```
+
+Run inside your repo, this writes `pip-card.svg` and `pip-badge.svg` and adds a marked **My PIP review** section to your README (the one at the bottom of this README is PIP reviewing this repo). Re-run it any time to refresh the grade.
+
+To keep it current automatically, use the GitHub Action in your workflow:
+
+```yaml
+name: pip-review
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: littlestjames82-sys/pip-pip@main
+```
+
+Every push gets a fresh review, committed by the bot. Your README becomes a living performance record, which is either motivating or a threat, depending on your habits.
+
 ## Private by construction
 
 PIP runs `git log`, `git grep` and `git blame` on your machine and nothing else. No network, no account, no API key, no telemetry, pure Python standard library. Your history is embarrassing enough without uploading it somewhere.
@@ -115,3 +144,15 @@ PIP runs `git log`, `git grep` and `git blame` on your machine and nothing else.
 ## License
 
 MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).
+
+<!-- pip:start -->
+## My PIP review
+
+![My PIP grade](pip-badge.svg)
+
+![PIP report card](pip-card.svg)
+
+**Grade: B (81/100)** · 9 commits reviewed · Top award: Polyglot · Reviewed 2026-11-18
+
+*This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) (`on-a-pip --readme`). The record speaks for itself.*
+<!-- pip:end -->

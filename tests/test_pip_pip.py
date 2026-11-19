@@ -346,7 +346,14 @@ class V4FeaturesTest(unittest.TestCase):
         self.assertIn("Rust", langs)
 
     def test_reference_letter(self):
-        review = review_of("/tmp/pip-sample")
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "refcheck")
+        make_repo(repo)
+        commit(repo, at(12, 10), "a documented change worthy of a reference",
+               files={"a.py": "print(1)\n"})
+        commit(repo, at(4, 10), "a second explained improvement for the record",
+               append={"a.py": "print(2)\n"})
+        review = review_of(repo)
         letter = pip_pip.render_reference(review)
         self.assertIn("Letter of reference", letter)
         self.assertIn(review.author, letter)
@@ -393,3 +400,46 @@ class LeaderboardIdentityTest(unittest.TestCase):
                                     file_totals=file_totals, min_commits=3)
         self.assertEqual(len(board), 2)
         self.assertEqual(sorted(r.total_commits for r in board), [3, 4])
+
+
+class ReadmeModeTest(unittest.TestCase):
+    def _repo_with_readme(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "demo")
+        make_repo(repo)
+        commit(repo, at(15, 10), "a well explained change for the demo repo",
+               files={"a.py": "print(1)\n"})
+        commit(repo, at(5, 10), "another documented improvement to the demo",
+               append={"a.py": "print(2)\n"})
+        with open(os.path.join(repo, "README.md"), "w") as f:
+            f.write("# Demo\n\nA fine project.\n")
+        return repo
+
+    def test_readme_section_written_once_and_refreshed(self):
+        repo = self._repo_with_readme()
+        review = review_of(repo)
+        readme, card, badge = pip_pip.update_readme(repo, review)
+        self.assertTrue(os.path.isfile(card))
+        self.assertTrue(os.path.isfile(badge))
+        with open(card) as f:
+            self.assertIn("<svg", f.read())
+        with open(readme) as f:
+            text = f.read()
+        self.assertEqual(text.count(pip_pip.README_START), 1)
+        self.assertIn("My PIP review", text)
+        self.assertIn("# Demo", text)
+        pip_pip.update_readme(repo, review)
+        with open(readme) as f:
+            text2 = f.read()
+        self.assertEqual(text2.count(pip_pip.README_START), 1)
+        self.assertEqual(text2.count("My PIP review"), 1)
+
+    def test_readme_missing_is_a_clean_error(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "bare")
+        make_repo(repo)
+        commit(repo, at(3, 10), "a commit in a repo without a readme file",
+               files={"a.py": "x\n"})
+        review = review_of(repo)
+        with self.assertRaises(pip_pip.PipError):
+            pip_pip.update_readme(repo, review)

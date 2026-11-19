@@ -1,0 +1,42 @@
+name: "PIP Review"
+description: "Run PIP on a repository and commit an updated report card section to its README."
+author: "Ghost Developer Studio"
+inputs:
+  author:
+    description: "Author to review (default: the most prolific author in the repo)"
+    required: false
+    default: ""
+  persona:
+    description: "The reviewing manager's style: corporate, brutal, supportive, or passive"
+    required: false
+    default: "corporate"
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Install PIP
+      run: pip install on-a-pip
+      shell: bash
+    - name: Run the review
+      run: |
+        if [ -n "${{ inputs.author }}" ]; then
+          on-a-pip . --readme --persona "${{ inputs.persona }}" --author "${{ inputs.author }}"
+        else
+          on-a-pip . --readme --persona "${{ inputs.persona }}"
+        fi
+      shell: bash
+    - name: Commit the updated card
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add README.md pip-card.svg pip-badge.svg
+        if git diff --cached --quiet; then
+          echo "PIP review unchanged."
+        else
+          git commit -m "Update PIP review card"
+          git push
+        fi
+      shell: bash
