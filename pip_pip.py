@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "0.9.0"
+__version__ = "1.0.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -138,9 +138,19 @@ def _parse_iso(text: str) -> datetime:
         raise
 
 
-def collect_commits(repo: str, max_commits: int) -> list[Commit]:
+def collect_commits(repo: str, max_commits: int, branch: str | None = None,
+                    path: str | None = None) -> list[Commit]:
     fmt = FS.join(["%H", "%P", "%aN", "%aE", "%aI", "%s", "%b"]) + RS
-    out = _git(repo, ["log", "--use-mailmap", f"--max-count={max_commits}", f"--format={fmt}"])
+    args = ["log", "--use-mailmap", f"--max-count={max_commits}", f"--format={fmt}"]
+    if branch:
+        ok = _git(repo, ["rev-parse", "--verify", "--quiet", f"{branch}^{{commit}}"],
+                  check=False).strip()
+        if not ok:
+            raise PipError(f"branch '{branch}' was not found in this repository")
+        args.append(branch)
+    if path:
+        args += ["--", path]
+    out = _git(repo, args)
     commits: list[Commit] = []
     for rec in out.split(RS):
         rec = rec.strip("\n")
@@ -161,14 +171,33 @@ def collect_commits(repo: str, max_commits: int) -> list[Commit]:
     return commits
 
 
-def collect_numstat(repo: str, shas: set[str], cap: int = 5000):
+GENERATED_BASENAMES = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+                       "Cargo.lock", "poetry.lock", "Pipfile.lock",
+                       "composer.lock", "Gemfile.lock", "go.sum", "bun.lockb",
+                       "flake.lock", "packages.lock.json"}
+GENERATED_SUFFIXES = (".min.js", ".min.css")
+
+
+def _is_generated(fname: str) -> bool:
+    base = fname.rsplit("/", 1)[-1]
+    return base in GENERATED_BASENAMES or base.endswith(GENERATED_SUFFIXES)
+
+
+def collect_numstat(repo: str, shas: set[str], cap: int = 5000,
+                    branch: str | None = None, path: str | None = None,
+                    exclude_generated: bool = True):
     """Return (per-commit stats, per-file totals).
 
     Per-commit: sha -> (added, deleted, files).
     Per-file: path -> (added, deleted, commits_touched).
     Capped for very large histories.
     """
-    out = _git(repo, ["log", f"--max-count={cap}", "--numstat", "--format=%H"])
+    log_args = ["log", f"--max-count={cap}", "--numstat", "--format=%H"]
+    if branch:
+        log_args.append(branch)
+    if path:
+        log_args += ["--", path]
+    out = _git(repo, log_args)
     stats: dict[str, tuple[int, int, int]] = {}
     files: dict[str, tuple[int, int, int]] = {}
     paths: dict[str, list[str]] = {}
@@ -187,14 +216,16 @@ def collect_numstat(repo: str, shas: set[str], cap: int = 5000):
             continue
         parts = line.split("\t")
         if len(parts) >= 3:
+            fname = parts[2]
+            if " => " in fname:
+                fname = fname.split(" => ")[-1].strip("{}")
+            if exclude_generated and _is_generated(fname):
+                continue
             a, d = parts[0], parts[1]
             added = int(a) if a.isdigit() else 0
             deleted = int(d) if d.isdigit() else 0
             pa, pd, pf = stats[current]
             stats[current] = (pa + added, pd + deleted, pf + 1)
-            fname = parts[2]
-            if " => " in fname:
-                fname = fname.split(" => ")[-1].strip("{}")
             paths[current].append(fname)
             fa, fd, fc = files.get(fname, (0, 0, 0))
             files[fname] = (fa + added, fd + deleted, fc + 1)
@@ -492,6 +523,8 @@ def _run_org(args) -> int:
         print(json.dumps({"org": args.org,
                           "repos": [{"repo": name, **review_to_json(r)} for name, r in rows]},
                          indent=2, default=str))
+    elif args.csv:
+        print(boards_to_csv(rows, with_repo=True), end="")
     else:
         print(render_org(rows, args.org))
     return 0
@@ -551,10 +584,14 @@ def scope_commits(commits: list[Commit], days: int | None) -> list[Commit]:
 def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
             author_filter: str | None, today: date,
             file_totals: dict[str, tuple[int, int, int]] | None = None,
-            persona: str = "corporate") -> Review:
+            persona: str = "corporate", include_bots: bool = False,
+            tz=None) -> Review:
     # Pick the employee: explicit filter, else the most prolific identity.
     # Identities group by email: one person under two names is one employee.
-    groups = _author_groups(commits_in)
+    if tz is not None:
+        from dataclasses import replace as _replace
+        commits_in = [_replace(c, when=c.when.astimezone(tz)) for c in commits_in]
+    groups = _author_groups(commits_in, include_bots=include_bots)
     if author_filter:
         f = author_filter.lower()
         matches = [(a, cs) for a, cs, _k in groups
@@ -749,6 +786,7 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
         "longest_subject": longest_subject,
         "shortest_subject": shortest_subject,
         "top_word": top_word, "top_word_count": top_word_count,
+        "squash_ratio": (sum(1 for s in subjects if re.search(r"\(#\d+\)\s*$", s)) / total) if total else 0.0,
     }
 
     # --- awards: the part people actually post --------------------------
@@ -825,28 +863,55 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
     )
 
 
-def _author_groups(commits_in: list[Commit]) -> list[tuple[str, list[Commit], str]]:
+BOT_RE = re.compile(
+    r"(\[bot\]|dependabot|renovate\[?\]?|github-actions|pre-commit-ci|codecov|"
+    r"bors\[?\]?|mergify|semantic-release|release-please|imgbot|allcontributors|"
+    r"deepsource|sonarcloud|snyk)", re.IGNORECASE)
+COAUTHOR_RE = re.compile(r"^Co-authored-by:\s*(.+?)\s*<([^>]+)>",
+                         re.IGNORECASE | re.MULTILINE)
+
+
+def _is_bot(name: str, email: str) -> bool:
+    return bool(BOT_RE.search(name or "") or BOT_RE.search(email or ""))
+
+
+def _author_groups(commits_in: list[Commit], include_bots: bool = False) -> list[tuple[str, list[Commit], str]]:
     """Group commits by identity: same email is the same person, whatever
-    name they committed under. Returns (display name, commits, identity key)
+    name they committed under. Co-authored-by trailers earn the co-author
+    shared credit for the commit. Bot identities are excluded unless
+    include_bots is set. Returns (display name, commits, identity key)
     where the key is the email when there is one, else the name."""
     groups: dict[str, list[Commit]] = {}
+    names_by_key: dict[str, dict[str, int]] = {}
+
+    def credit(key: str, display: str, c: Commit) -> None:
+        groups.setdefault(key, []).append(c)
+        names = names_by_key.setdefault(key, {})
+        names[display] = names.get(display, 0) + 1
+
     for c in commits_in:
         key = (c.email or "").strip().lower() or f"name:{c.author.strip().lower()}"
-        groups.setdefault(key, []).append(c)
+        credit(key, c.author, c)
+        for m in COAUTHOR_RE.finditer(c.body or ""):
+            ca_key = m.group(2).strip().lower()
+            if ca_key and ca_key != key:
+                credit(ca_key, m.group(1).strip(), c)
     result: list[tuple[str, list[Commit], str]] = []
     for key, cs in groups.items():
-        names: dict[str, int] = {}
-        for c in cs:
-            names[c.author] = names.get(c.author, 0) + 1
-        result.append((max(names.items(), key=lambda kv: kv[1])[0], cs, key))
+        display = max(names_by_key[key].items(), key=lambda kv: kv[1])[0]
+        if not include_bots and _is_bot(display, key):
+            continue
+        result.append((display, cs, key))
     return result
 
 
 def leaderboard(repo: str, commits_in: list[Commit], markers: list[Marker],
                 today: date, file_totals=None, persona: str = "corporate",
-                min_commits: int = 5, top: int = 8) -> list[Review]:
+                min_commits: int = 5, top: int = 8,
+                include_bots: bool = False, tz=None) -> list[Review]:
     """Review every author in the repo and rank them. The office feature."""
-    ranked = sorted(((name, len(cs), key) for name, cs, key in _author_groups(commits_in)),
+    ranked = sorted(((name, len(cs), key) for name, cs, key in
+                     _author_groups(commits_in, include_bots=include_bots)),
                     key=lambda kv: -kv[1])
     reviews: list[Review] = []
     for name, count, key in ranked[:top]:
@@ -857,7 +922,8 @@ def leaderboard(repo: str, commits_in: list[Commit], markers: list[Marker],
         target = key if "@" in key else name
         try:
             reviews.append(analyze(repo, commits_in, markers, target, today,
-                                   file_totals=file_totals, persona=persona))
+                                   file_totals=file_totals, persona=persona,
+                                   include_bots=include_bots, tz=tz))
         except PipError:
             continue
     return sorted(reviews, key=lambda r: -r.overall_score)
@@ -997,6 +1063,8 @@ def render_markdown(review: Review) -> str:
         out.append(f"- **Shortest commit message:** \"{h['shortest_subject']}\". A haiku, if you squint.")
     if h.get("top_word"):
         out.append(f"- **Catchphrase:** \"{h['top_word']}\", appearing {h['top_word_count']} times across your commit subjects.")
+    if (h.get("squash_ratio") or 0) >= 0.4:
+        out.append(f"- **Authorship note:** {h['squash_ratio']:.0%} of these commits look like squash merges (subjects ending in a PR number). Squash merges credit whoever pressed the merge button, not whoever wrote the code, so read this grade as the record of the button-presser.")
     out.append(f"- **Net lines:** {int(h['added']):,} added, {int(h['deleted']):,} deleted.")
     if int(h.get("swears", 0)) > 0:
         out.append(f"- **Language:** {h['swears']} commit messages contain profanity. The record reflects the journey.")
@@ -1023,6 +1091,8 @@ def render_markdown(review: Review) -> str:
     out.append("Signed,  ")
     out.append("**Management**  ")
     out.append("*PIP - pip install on-a-pip*")
+    out.append("")
+    out.append(f"*{NOT_FOR_EMPLOYMENT}*")
     out.append("")
     return "\n".join(out)
 
@@ -1085,7 +1155,7 @@ def render_svg(review: Review) -> str:
   <text x="128" y="134" font-family="Georgia, serif" font-size="12" fill="#777">Overall score: {review.overall_score:.0f}/100</text>
   <line x1="36" y1="160" x2="644" y2="160" stroke="#222" stroke-width="1"/>
 {rows}{awards}{bars}
-  <text x="340" y="{height - 14}" font-family="Georgia, serif" font-size="11" fill="#777" text-anchor="middle">Generated locally by PIP from the employee's own git history. pip install on-a-pip</text>
+  <text x="340" y="{height - 14}" font-family="Georgia, serif" font-size="11" fill="#777" text-anchor="middle">Generated locally by PIP from the employee's own git history. pip install on-a-pip · Not for employment decisions.</text>
 </svg>
 """
 
@@ -1153,6 +1223,42 @@ def render_wrapped_svg(review: Review, year: int) -> str:
   <text x="340" y="386" font-family="Georgia, serif" font-size="11" fill="#888" text-anchor="middle">PIP Wrapped. Generated locally from git history. pip install on-a-pip</text>
 </svg>
 """
+
+
+def render_share_svg(review: Review) -> str:
+    """The 1200x630 share card: the size social platforms actually render."""
+    color = GRADE_COLORS[review.overall_letter]
+    award = review.awards[0][0] if review.awards else "No awards. A quiet record."
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="PIP review for {html.escape(review.author)}">
+  <rect x="4" y="4" width="1192" height="622" fill="#fdfcf8" stroke="#222" stroke-width="3"/>
+  <text x="64" y="92" font-family="Georgia, serif" font-size="26" letter-spacing="4" fill="#555">PERFORMANCE IMPROVEMENT PLAN</text>
+  <text x="64" y="140" font-family="Georgia, serif" font-size="19" fill="#777">{html.escape(review.author)} | {html.escape(review.repo_name)} | {review.total_commits} commits reviewed</text>
+  <rect x="64" y="176" width="220" height="220" rx="14" fill="{color}"/>
+  <text x="174" y="330" font-family="Georgia, serif" font-size="150" font-weight="bold" fill="#fff" text-anchor="middle">{review.overall_letter}</text>
+  <text x="330" y="238" font-family="Georgia, serif" font-size="30" font-style="italic" fill="#222">{html.escape(verdict_for(review))}</text>
+  <text x="330" y="292" font-family="Georgia, serif" font-size="24" fill="#444">Overall score: {review.overall_score:.0f}/100</text>
+  <text x="330" y="340" font-family="Georgia, serif" font-size="24" fill="#444">Top award: {html.escape(award)}</text>
+  <text x="330" y="388" font-family="Georgia, serif" font-size="24" fill="#444">Catchphrase: "{html.escape(str(review.highlights.get('top_word') or 'n/a'))}"</text>
+  <line x1="64" y1="470" x2="1136" y2="470" stroke="#222" stroke-width="1"/>
+  <text x="64" y="530" font-family="Georgia, serif" font-size="22" fill="#333">My git history put me on a PIP. Yours can too:</text>
+  <text x="64" y="572" font-family="Menlo, monospace" font-size="26" fill="#111">pip install on-a-pip</text>
+  <text x="1136" y="572" font-family="Georgia, serif" font-size="15" fill="#999" text-anchor="end">Not for employment decisions.</text>
+</svg>
+"""
+
+
+def boards_to_csv(rows: list[tuple[str, Review]], with_repo: bool) -> str:
+    import csv
+    import io
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow((["repo"] if with_repo else []) +
+               ["author", "grade", "score", "commits", "top_award"])
+    for name, r in rows:
+        w.writerow((([name] if with_repo else []) +
+                    [r.author, r.overall_letter, f"{r.overall_score:.1f}",
+                     r.total_commits, r.awards[0][0] if r.awards else ""]))
+    return buf.getvalue()
 
 
 def render_badge(review: Review) -> str:
@@ -1251,11 +1357,13 @@ def render_vs_markdown(a: Review, b: Review) -> str:
     out.append("")
     out.append("*Generated by PIP. pip install on-a-pip*")
     out.append("")
+    out.append(f"*{NOT_FOR_EMPLOYMENT}*")
+    out.append("")
     return "\n".join(out)
 
 
 def scan_repos(root: str, persona: str = "corporate", today: date | None = None,
-               max_commits: int = 5000) -> list[tuple[str, Review]]:
+               max_commits: int = 5000, include_bots: bool = False) -> list[tuple[str, Review]]:
     """Review the top author of every git repo directly inside a folder."""
     today = today or date.today()
     results: list[tuple[str, Review]] = []
@@ -1277,7 +1385,8 @@ def scan_repos(root: str, persona: str = "corporate", today: date | None = None,
                     c.paths = tuple(paths_by_sha.get(c.sha, ()))
             markers = collect_markers(path)
             review = analyze(path, commits, markers, None, today,
-                             file_totals=file_totals, persona=persona)
+                             file_totals=file_totals, persona=persona,
+                             include_bots=include_bots)
             results.append((name, review))
         except PipError:
             continue
@@ -1330,7 +1439,7 @@ def render_html(review: Review) -> str:
   <div class="overall"><div class="big">{review.overall_letter}</div>
   <div class="verdict">"{html.escape(verdict_for(review))}"</div></div>
 {rows}{awards_html(review)}
-  <div class="foot">Generated locally by PIP from the employee's own git history. Nothing was uploaded.<br>
+  <div class="foot">Generated locally by PIP from the employee's own git history. Nothing was uploaded. Not for employment decisions.<br>
   pip install on-a-pip</div>
 </div></body></html>
 """
@@ -1580,6 +1689,28 @@ def render_coach_markdown(review: Review) -> str:
     return "\n".join(out)
 
 
+def parse_tz(text: str):
+    """Parse a --tz value: an IANA name (Europe/Berlin) or a fixed offset
+    like UTC+05:30 / UTC-4. Returns a tzinfo; PipError with guidance if not."""
+    from datetime import timezone as _tz, timedelta as _td
+    m = re.fullmatch(r"UTC([+-])(\d{1,2})(?::?(\d{2}))?", text.strip(), re.IGNORECASE)
+    if m:
+        sign = 1 if m.group(1) == "+" else -1
+        hours = int(m.group(2)) + int(m.group(3) or 0) / 60
+        return _tz(_td(hours=sign * hours))
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(text)
+    except Exception:
+        raise PipError(f"timezone '{text}' was not understood. Use an IANA name "
+                       "like Europe/Berlin, or a fixed offset like UTC+05:30.")
+
+
+NOT_FOR_EMPLOYMENT = ("Not for employment decisions. PIP grades a commit record, "
+                      "not a person, and it reads best when the person reading it "
+                      "is the person who wrote the commits.")
+
+
 def load_repo_config(repo: str) -> dict:
     """Read .pip.toml defaults (persona, fail_below) from the repo root.
     Deliberately a tiny parser: two string keys, no dependency on tomllib
@@ -1651,7 +1782,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--blame", metavar="FILE",
                     help="review only the commits that touched this file")
     ap.add_argument("--fail-below", choices=["A", "B", "C", "D", "F"], metavar="GRADE",
-                    help="exit with code 3 if the overall grade is worse than GRADE (for CI gates, serious or otherwise)")
+                    help="exit with code 3 if the overall grade is worse than GRADE (a novelty CI gate; not an employment tool)")
+    ap.add_argument("--include-bots", action="store_true",
+                    help="include bot authors (dependabot and friends) instead of excluding them by default")
+    ap.add_argument("--tz", metavar="TZ",
+                    help="grade in this timezone (IANA name like Europe/Berlin, or UTC+05:30) instead of each commit's own offset")
+    ap.add_argument("--branch", metavar="NAME", help="review only this branch")
+    ap.add_argument("--path", metavar="PATH", help="review only commits touching this path")
+    ap.add_argument("--include-generated", action="store_true",
+                    help="count lockfiles and minified files in churn (excluded by default)")
+    ap.add_argument("--share", metavar="FILE",
+                    help="also write the 1200x630 share card (SVG) to this file")
+    ap.add_argument("--csv", action="store_true",
+                    help="with --leaderboard, --scan, or --org, print CSV instead of the board")
     ap.add_argument("--md", metavar="FILE", help="write the full review as Markdown")
     ap.add_argument("--html", metavar="FILE", help="write the shareable report card as HTML")
     ap.add_argument("--svg", metavar="FILE", help="write the shareable report card as SVG (embeds in READMEs)")
@@ -1698,6 +1841,13 @@ def main(argv: list[str] | None = None) -> int:
         args.persona = cfg.get("persona") if cfg.get("persona") in PERSONAS else "corporate"
     if args.fail_below is None and cfg.get("fail_below") in ("A", "B", "C", "D", "F"):
         args.fail_below = cfg["fail_below"]
+    tzinfo_obj = None
+    if args.tz:
+        try:
+            tzinfo_obj = parse_tz(args.tz)
+        except PipError as e:
+            print(f"on-a-pip: {e}", file=sys.stderr)
+            return 2
     if args.history:
         entries = load_history(progress_key)
         if not entries:
@@ -1714,13 +1864,15 @@ def main(argv: list[str] | None = None) -> int:
         if not os.path.isdir(repo):
             print(f"on-a-pip: {args.repo} is not a directory to scan", file=sys.stderr)
             return 2
-        results = scan_repos(repo, persona=args.persona)
+        results = scan_repos(repo, persona=args.persona, include_bots=args.include_bots)
         if not results:
             print("on-a-pip: no git repositories with commits found in that folder", file=sys.stderr)
             return 2
         if args.json:
             print(json.dumps({"scan": [{"repo": name, **review_to_json(r)} for name, r in results]},
                              indent=2, default=str))
+        elif args.csv:
+            print(boards_to_csv(results, with_repo=True), end="")
         else:
             print(render_scan(results, os.path.basename(repo) or repo))
         return 0
@@ -1728,7 +1880,8 @@ def main(argv: list[str] | None = None) -> int:
         inside = _git(repo, ["rev-parse", "--is-inside-work-tree"], check=False).strip()
         if inside != "true":
             raise PipError(f"{args.repo} is not a git repository")
-        commits = collect_commits(repo, args.max_commits)
+        commits = collect_commits(repo, args.max_commits,
+                                  branch=args.branch, path=args.path)
         if not commits:
             raise PipError("this repository has no commits yet. Management cannot review potential.")
         commits = scope_commits(commits, args.days)
@@ -1741,7 +1894,9 @@ def main(argv: list[str] | None = None) -> int:
             commits = [c for c in commits if lo <= c.when.date() <= hi]
         if not commits:
             raise PipError("no commits in the requested period. Management cannot review a rumor.")
-        stats, file_totals, paths_by_sha = collect_numstat(repo, {c.sha for c in commits})
+        stats, file_totals, paths_by_sha = collect_numstat(
+            repo, {c.sha for c in commits}, branch=args.branch, path=args.path,
+            exclude_generated=not args.include_generated)
         for c in commits:
             if c.sha in stats:
                 c.added, c.deleted, c.files = stats[c.sha]
@@ -1755,9 +1910,11 @@ def main(argv: list[str] | None = None) -> int:
         markers = collect_markers(repo)
         if args.vs:
             first = analyze(repo, commits, markers, args.vs[0], date.today(),
-                            file_totals=file_totals, persona=args.persona)
+                            file_totals=file_totals, persona=args.persona,
+                            include_bots=args.include_bots, tz=tzinfo_obj)
             second = analyze(repo, commits, markers, args.vs[1], date.today(),
-                             file_totals=file_totals, persona=args.persona)
+                             file_totals=file_totals, persona=args.persona,
+                             include_bots=args.include_bots, tz=tzinfo_obj)
             if args.json:
                 print(json.dumps({"versus": [review_to_json(first), review_to_json(second)]},
                                  indent=2, default=str))
@@ -1770,7 +1927,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.leaderboard:
             board = leaderboard(repo, commits, markers, date.today(),
-                                file_totals=file_totals, persona=args.persona, top=args.top)
+                                file_totals=file_totals, persona=args.persona, top=args.top,
+                                include_bots=args.include_bots, tz=tzinfo_obj)
             if not board:
                 raise PipError("no author has enough commits to rank yet")
             repo_name = os.path.basename(repo) or repo
@@ -1780,11 +1938,14 @@ def main(argv: list[str] | None = None) -> int:
                                   "pairs": [{"authors": [a, b], "shared_days": n}
                                             for a, b, n in pairs]},
                                  indent=2, default=str))
+            elif args.csv:
+                print(boards_to_csv([(r.repo_name, r) for r in board], with_repo=False), end="")
             else:
                 print(render_leaderboard(board, repo_name, pairs=pairs))
             return 0
         review = analyze(repo, commits, markers, args.author, date.today(),
-                         file_totals=file_totals, persona=args.persona)
+                         file_totals=file_totals, persona=args.persona,
+                         include_bots=args.include_bots, tz=tzinfo_obj)
         if args.blame:
             review.repo_name = f"{review.repo_name} :: {args.blame}"
     except PipError as e:
@@ -1795,6 +1956,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     previous = None if args.blame else load_previous(progress_key)
+    if args.author:
+        print("Note: you are reviewing someone else's record. PIP is a joke best "
+              "told by the person themselves; share it with them, not about them.",
+              file=sys.stderr)
     if args.json:
         print(json.dumps(review_to_json(review), indent=2, default=str))
     elif args.coach:
@@ -1820,6 +1985,13 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.svg, "w", encoding="utf-8") as f:
             f.write(render_wrapped_svg(review, args.year) if args.year else render_svg(review))
         print(f"SVG report card written to {args.svg}")
+    if args.share:
+        with open(args.share, "w", encoding="utf-8") as f:
+            f.write(render_share_svg(review))
+        print(f"Share card (1200x630) written to {args.share}")
+        print(f"Post text: My git history just put me on a Performance Improvement Plan. "
+              f"Grade: {review.overall_letter} ({review.overall_score:.0f}/100). "
+              f"Get yours: pip install on-a-pip")
     if args.outdir:
         os.makedirs(args.outdir, exist_ok=True)
         artifacts = {

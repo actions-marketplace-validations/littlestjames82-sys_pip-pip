@@ -838,3 +838,121 @@ class V9FeaturesTest(unittest.TestCase):
         text = pip_pip.render_org(rows, "someone")
         self.assertIn("PIP ORG BOARD", text)
         self.assertIn("Org MVP", text)
+
+
+class V10FeaturesTest(unittest.TestCase):
+    def test_bots_excluded_by_default(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "bots")
+        make_repo(repo)
+        for i in range(10):
+            commit(repo, at(40 - i * 2, 10), "chore(deps): bump the thing from 1 to 2",
+                   author="dependabot[bot] <dependabot[bot]@users.noreply.github.com>",
+                   files={"deps.txt": "x\n"} if i == 0 else None,
+                   append={"deps.txt": f"# {i}\n"} if i > 0 else None)
+        for i in range(6):
+            commit(repo, at(30 - i * 2, 11), f"a human improvement number {i} with explanation",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        review = review_of(repo)
+        self.assertEqual(review.author, "Dev Example")
+        board = pip_pip.leaderboard(repo, pip_pip.collect_commits(repo, 1000),
+                                    pip_pip.collect_markers(repo), date.today())
+        self.assertEqual([r.author for r in board], ["Dev Example"])
+        board_with_bots = pip_pip.leaderboard(
+            repo, pip_pip.collect_commits(repo, 1000), pip_pip.collect_markers(repo),
+            date.today(), include_bots=True)
+        self.assertEqual(len(board_with_bots), 2)
+
+    def test_coauthor_gets_credit(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "coauth")
+        make_repo(repo)
+        for i in range(3):
+            commit(repo, at(20 - i * 3, 10), f"paired work number {i} with explanation",
+                   body="Co-authored-by: Beta Dev <beta@example.com>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        commit(repo, at(5, 10), "beta solo change with explanation",
+               author="Beta Dev <beta@example.com>", append={"a.py": "solo\n"})
+        groups = {name: len(cs) for name, cs, _k in pip_pip._author_groups(
+            pip_pip.collect_commits(repo, 1000))}
+        self.assertEqual(groups["Beta Dev"], 4)
+        self.assertEqual(groups["Dev Example"], 3)
+
+    def test_timezone_override_changes_night_verdict(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "tz")
+        make_repo(repo)
+        for i in range(10):
+            when = (datetime.now(timezone.utc) - timedelta(days=30 - i * 2)).replace(
+                hour=23, minute=30, second=0, microsecond=0)
+            commit(repo, when, f"late work number {i} with a full explanation",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        plain = review_of(repo)
+        self.assertEqual(plain.highlights["night_commits"], 10)
+        shifted = review_of(repo, tz=pip_pip.parse_tz("UTC+12"))
+        self.assertEqual(shifted.highlights["night_commits"], 0)
+        self.assertEqual(pip_pip.parse_tz("UTC+05:30").utcoffset(None),
+                         timedelta(hours=5, minutes=30))
+        with self.assertRaises(pip_pip.PipError):
+            pip_pip.parse_tz("Mars/Olympus")
+
+    def test_generated_files_excluded_from_churn(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "gen")
+        make_repo(repo)
+        lock = "".join(f"lock line {i}\n" for i in range(500))
+        commit(repo, at(9, 10), "add the app and its lockfile with explanation",
+               files={"app.py": "x\n" * 10, "package-lock.json": lock})
+        review = review_of(repo)
+        self.assertEqual(int(review.highlights["added"]), 10)
+        commits = pip_pip.collect_commits(repo, 100)
+        _s, totals, _p = pip_pip.collect_numstat(repo, {c.sha for c in commits},
+                                                 exclude_generated=False)
+        self.assertEqual(totals["package-lock.json"][0], 500)
+
+    def test_branch_and_path_filters(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "filters")
+        make_repo(repo)
+        commit(repo, at(20, 10), "base work on a with explanation", files={"a.py": "x\n"})
+        commit(repo, at(18, 10), "base work on b with explanation", files={"b.py": "x\n"})
+        main_branch = subprocess.run(["git", "-C", repo, "branch", "--show-current"],
+                                     capture_output=True, text=True).stdout.strip() or "main"
+        _run(repo, "checkout", "-q", "-b", "feature")
+        commit(repo, at(10, 10), "feature work on b with explanation", append={"b.py": "y\n"})
+        commit(repo, at(9, 10), "more feature work on b explained", append={"b.py": "z\n"})
+        _run(repo, "checkout", "-q", main_branch)
+        self.assertEqual(len(pip_pip.collect_commits(repo, 100)), 2)
+        self.assertEqual(len(pip_pip.collect_commits(repo, 100, branch="feature")), 4)
+        self.assertEqual(len(pip_pip.collect_commits(repo, 100, branch=main_branch)), 2)
+        self.assertEqual(len(pip_pip.collect_commits(repo, 100, branch="feature", path="b.py")), 3)
+        with self.assertRaises(pip_pip.PipError):
+            pip_pip.collect_commits(repo, 100, branch="no-such-branch")
+
+    def test_squash_confidence_note(self):
+        tmp = tempfile.mkdtemp()
+        repo = os.path.join(tmp, "squashy")
+        make_repo(repo)
+        for i in range(5):
+            suffix = f" (#{100 + i})" if i < 3 else ""
+            commit(repo, at(20 - i * 2, 10), f"a change number {i} with explanation{suffix}",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        review = review_of(repo)
+        self.assertAlmostEqual(review.highlights["squash_ratio"], 0.6)
+        self.assertIn("Authorship note", pip_pip.render_markdown(review))
+
+    def test_share_card_and_csv(self):
+        ProfessionalDevTest.setUpClass()
+        review = review_of(ProfessionalDevTest.repo)
+        svg = pip_pip.render_share_svg(review)
+        self.assertIn('width="1200" height="630"', svg)
+        self.assertIn("Not for employment decisions", svg)
+        csv_text = pip_pip.boards_to_csv([("repo", review)], with_repo=True)
+        self.assertIn("author,grade,score", csv_text.replace("repo,", "", 1) if False else csv_text)
+        self.assertIn(review.author, csv_text)
+        md = pip_pip.render_markdown(review)
+        self.assertIn("Not for employment decisions", md)

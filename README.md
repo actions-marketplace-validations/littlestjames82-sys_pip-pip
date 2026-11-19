@@ -1,6 +1,14 @@
-# PIP: the performance review where the AI reviews *you*
+# PIP: your git history just put you on a Performance Improvement Plan
 
-Every AI tool reviews your code. **PIP reviews the programmer.**
+Every tool reviews your code. **PIP reviews the programmer.**
+
+![PIP report card](examples/sample-report-card.svg)
+
+No AI, no models, no uploads: PIP is one Python file of plain arithmetic that reads your
+local git history and issues a formal manager-style performance review of the person who
+wrote it. Grades, evidence, awards, and a 30-day improvement plan. It is a novelty that
+takes its evidence seriously, and it is **not for employment decisions**: it grades a
+commit record, not a person, and it reads best when the reader is the author.
 
 Every developer keeps a work diary without knowing it: their git history. Every change is in there, with a timestamp and a little note that was supposed to explain it. PIP reads that record, locally, on your own machine, and issues a formal manager-style performance review. With evidence.
 
@@ -14,7 +22,7 @@ Then, inside any git repository:
 on-a-pip
 ```
 
-Or review somebody else's, straight from the internet:
+Or see how a famous project's record grades out, straight from the internet:
 
 ```
 on-a-pip psf/requests                      # GitHub shorthand
@@ -93,6 +101,9 @@ on-a-pip --history                # your grade trend across every saved review o
 on-a-pip --coach                  # coaching mode: a four-week drill plan instead of a verdict
 on-a-pip --blame app.py           # a performance review for one file: every commit that touched it
 on-a-pip --org psf                # org board: the top author of a GitHub user's public repos
+on-a-pip --share card.svg         # the 1200x630 share card, sized for social posts
+on-a-pip --tz Europe/Berlin       # grade in your timezone, not the server's
+on-a-pip --branch main --path src # narrow the record: one branch, one corner of the tree
 on-a-pip --persona-file noir.json # bring your own manager: a custom persona pack
 on-a-pip --leaderboard            # review every author in the repo and rank them
 on-a-pip psf/requests               # or skip the local part entirely: any public repo by URL
@@ -117,6 +128,8 @@ on-a-pip --json                   # machine-readable review
 - **Repo config:** a `.pip.toml` in the repo root can set `persona` and `fail_below` once for the whole team; the command line still wins.
 - 21 awards now, including The Archaeologist (revives files untouched for a year), Merge Goblin, Lone Wolf, and Rubber Duck (commit bodies longer than some READMEs).
 - **Org boards** (`--org`): point PIP at any GitHub user and get one ranked board across their public repos, with an Org MVP.
+- **Fair records by default:** bot authors (dependabot and friends) are excluded unless you ask for them with `--include-bots`; Co-authored-by trailers earn shared credit; lockfiles and minified files do not count as churn; squash-merge-heavy histories carry an authorship note saying the grade belongs to whoever pressed the merge button.
+- **Boards export:** `--csv` prints leaderboard, scan, and org boards as CSV; `--json` covers every mode.
 - **Pair stats:** the leaderboard now names the pair most in sync, ranked by shared active days.
 - **Persona packs:** six managers built in (Corporate, Startup CTO, Supportive Lead, Passive-Aggressive Middle Manager, Pirate Captain, Noir Detective), and `--persona-file` loads your own from a small JSON pack. Two sample packs live in `personas/`.
 - A scheduled monthly profile-review Action example lives in `examples/`.
@@ -183,7 +196,7 @@ MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).
 
 ![PIP report card](pip-card.svg)
 
-**Grade: B (77/100)** · 18 commits reviewed · Top award: Night Owl · Reviewed 2026-11-19
+**Grade: B (81/100)** · 9 commits reviewed · Top award: Polyglot · Reviewed 2026-11-18
 
 *This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) (`on-a-pip --readme`). The record speaks for itself.*
 <!-- pip:end -->
