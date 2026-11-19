@@ -1,0 +1,93 @@
+Metadata-Version: 2.4
+Name: pip-pip
+Version: 0.1.0
+Summary: PIP: your AI puts YOU on a Performance Improvement Plan. A local, private review of the programmer, generated from their own git history.
+Author-email: Ryan Cotten <hello@ghostdeveloperstudio.com>
+License: MIT
+Project-URL: Homepage, https://github.com/littlestjames82-sys/pip-pip
+Project-URL: Repository, https://github.com/littlestjames82-sys/pip-pip
+Keywords: git,performance-review,developer-tools,fun,report-card
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Software Development :: Version Control :: Git
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: license-file
+
+# PIP: the performance review where the AI reviews *you*
+
+Every AI tool reviews your code. **PIP reviews the programmer.**
+
+Every developer keeps a work diary without knowing it: their git history. Every change is in there, with a timestamp and a little note that was supposed to explain it. PIP reads that record, locally, on your own machine, and issues a formal manager-style performance review. With evidence.
+
+```
+pip install pip-pip
+```
+
+Then, inside any git repository:
+
+```
+pip-pip
+```
+
+```
+  PERFORMANCE IMPROVEMENT PLAN  -  Dev Example
+  pip-sample  |  8 commits reviewed  |  2025-10-14 to 2026-11-08
+  --------------------------------------------------------------
+  Communication    F    32.5  ######
+  Reliability      C    64.4  ############
+  Follow-through   B    84.3  ################
+  Judgment         B    83.8  #################
+  Consistency      D    43.0  ########
+  --------------------------------------------------------------
+  OVERALL          C    61.6
+  Meets some expectations. There is a conversation to be had.
+```
+
+(That is a real review of a deliberately terrible sample history. Yours will be different. Possibly worse.)
+
+## What it grades
+
+- **Communication.** How many of your commit messages actually say anything. "stuff", "wip" and "asdf" are entered into the record, quoted back at you.
+- **Reliability.** Commits between 10pm and 5am. Commits shipped Friday after 4pm. Reverts. Chains of commits that start with "fix".
+- **Follow-through.** The TODOs still sitting in your code, and how old the oldest one is. A TODO that has been waiting 400 days has seniority.
+- **Judgment.** The spots labelled "temporary", "hack" or "workaround", and how long the oldest one has been load-bearing.
+- **Consistency.** Active days versus silent stretches, longest streak, longest disappearance.
+
+Then it does what any good PIP does: it writes you a **30-day improvement plan**, generated from your three weakest categories, and signs off with the only appeal process that has ever worked: improve the record.
+
+## Outputs
+
+```
+pip-pip ~/some/repo --md review.md --html card.html
+pip-pip --author "your name"     # review one author (default: the most prolific)
+pip-pip --json                   # machine-readable review
+```
+
+- The terminal summary above.
+- A full formal review in Markdown: per-category evidence, management notes, the plan, the sign-off.
+- A shareable **report card** in HTML (see `examples/`), made for posting. Every card is different, because every history is different.
+
+Sample outputs live in [`examples/`](examples/): a full sample review, a sample report card, and a real report card generated from the Decksmith repository.
+
+## Private by construction
+
+PIP runs `git log`, `git grep` and `git blame` on your machine and nothing else. No network, no account, no API key, no telemetry, pure Python standard library. Your history is embarrassing enough without uploading it somewhere.
+
+## Requirements
+
+- Python 3.9+
+- git, on your PATH
+
+## Honest notes
+
+- The package you install is `pip-pip`, because the name `pip` was, understandably, already taken by pip. The second pip reviews the first pip's user.
+- Grades are deterministic: same history, same review. The formulas are plain arithmetic in one file, `pip_pip.py`, if you want to argue with them.
+- PIP reviews the most prolific author in the repo by default. Use `--author` in shared repos.
+
+## License
+
+MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).

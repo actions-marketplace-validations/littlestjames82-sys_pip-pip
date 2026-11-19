@@ -1,0 +1,2 @@
+[console_scripts]
+pip-pip = pip_pip:main
