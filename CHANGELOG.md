@@ -3,7 +3,7 @@
 All notable changes to PIP (PyPI: `on-a-pip`) are recorded here. Versions are
 the tool's own; the record is the record.
 
-## Unreleased
+## 1.3.0 (Nov 20, 2026)
 
 - **Authorship check.** Every review gains an Authorship section (terminal,
   Markdown, HTML card, and JSON): the reviewed author's share of the

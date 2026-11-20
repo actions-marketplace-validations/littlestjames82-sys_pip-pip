@@ -30,7 +30,7 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
