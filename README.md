@@ -229,9 +229,11 @@ MIT. Built by [Ghost Developer Studio](https://ghostdeveloperstudio.com).
 
 ![My PIP grade](pip-badge.svg)
 
+![Authorship](pip-authorship-badge.svg)
+
 ![PIP report card](pip-card.svg)
 
-**Grade: B (75/100)** · 31 commits reviewed · Top award: Night Owl · Reviewed 2026-11-20
+**Grade: B (75/100)** · 32 commits reviewed · Top award: Night Owl · Reviewed 2026-11-20
 
 *This section is maintained by [PIP](https://pypi.org/project/on-a-pip/) (`on-a-pip --readme`). The record speaks for itself.*
 <!-- pip:end -->
