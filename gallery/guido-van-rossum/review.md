@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 200 of 24927 commits in this history (1%) are by Guido van Rossum. The remaining 24727 are by 2606 other authors.
+- **Most of the rest:** Victor Stinner (2154 commits), Serhiy Storchaka (1687 commits), Nikita Sobolev (862 commits).
+- **Arrival:** the history starts 2021-04-03; Guido van Rossum's first commit is 2021-06-21, and 821 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: A (100/100)
 
 - 0 of 206 commit messages (0%) say almost nothing (average message length: 61 characters).
