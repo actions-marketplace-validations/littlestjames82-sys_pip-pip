@@ -333,6 +333,7 @@ class Review:
     highlights: dict[str, object]
     awards: list[tuple[str, str]] = field(default_factory=list)
     persona: str = "corporate"
+    authorship: "Authorship | None" = None
 
     @property
     def overall_score(self) -> float:
@@ -603,15 +604,16 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
         if not exact:
             raise PipError("that author identity is no longer in the record")
         author, commits = exact[0]
+        sel_key = author_key
     elif author_filter:
         f = author_filter.lower()
-        matches = [(a, cs) for a, cs, _k in groups
+        matches = [(a, cs, k) for a, cs, k in groups
                    if f in a.lower() or any(f in (c.email or "").lower() for c in cs)]
         if not matches:
             raise PipError(f"no commits found for author matching '{author_filter}'")
-        author, commits = max(matches, key=lambda kv: len(kv[1]))
+        author, commits, sel_key = max(matches, key=lambda kv: len(kv[1]))
     else:
-        author, commits, _k = max(groups, key=lambda kv: len(kv[1]))
+        author, commits, sel_key = max(groups, key=lambda kv: len(kv[1]))
     commits = sorted(commits, key=lambda c: c.when)
     total = len(commits)
     if total == 0:
@@ -871,6 +873,8 @@ def analyze(repo: str, commits_in: list[Commit], markers: list[Marker],
         highlights=highlights,
         awards=awards,
         persona=persona,
+        authorship=authorship_for(commits_in, sel_key,
+                                  include_bots=include_bots),
     )
 
 
@@ -914,6 +918,151 @@ def _author_groups(commits_in: list[Commit], include_bots: bool = False) -> list
             continue
         result.append((display, cs, key))
     return result
+
+
+# --------------------------------------------------------------------------
+# authorship check: how much of this history is the reviewed author's own?
+# --------------------------------------------------------------------------
+#
+# The five graded categories only ever see the reviewed author's commits.
+# That is the right way to grade a person, but it has a blind spot: review
+# someone on a repository they barely touched - a fork they rebranded, say -
+# and the grade describes a record written almost entirely by other people,
+# without the report ever saying so. This check says so. It is descriptive
+# only: it never feeds the scores.
+#
+# Method, from git log data alone (no network, no forge API):
+# - Every commit counts once, under its git author. Co-authored-by trailers
+#   earn no extra share here; the author of record is the author.
+# - Identities cluster the way the rest of PIP clusters them: by email,
+#   with git's mailmap already applied by collect_commits. On top of that,
+#   clusters whose display names differ only in case, spacing, or
+#   punctuation are merged, so one person committing as "Timothy Carambat"
+#   and as "timothycarambat" is one author in this report. Two different
+#   people who share a name and use different emails would merge too; git
+#   alone cannot tell them apart either, and the report says "authors",
+#   not "verified persons".
+# - Bot identities are excluded unless the review itself includes them
+#   (--include-bots), matching how the rest of the review treats bots.
+# - Merge commits count like any other commit, credited to whoever made
+#   the merge: integrating other people's work is work, and the check
+#   measures who shows up in the record, not who typed every line.
+
+AUTHORSHIP_MAX_SHARE = 0.10        # reviewed author wrote at most 10% ...
+AUTHORSHIP_MIN_PREDATING = 0.50    # ... and at least half the history ...
+AUTHORSHIP_MIN_HISTORY = 20        # ... in a history of at least 20 commits
+
+
+@dataclass
+class Authorship:
+    history_commits: int            # commits in the reviewed history
+    author_commits: int             # of those, authored by the reviewed author
+    other_authors: int              # distinct other identities in the history
+    top_others: list                # [(display name, commits)], biggest first, max 3
+    history_start: date | None      # earliest commit in the history
+    author_first: date | None       # reviewed author's first commit (None if they have none)
+    inherited_before: int           # others' commits dated before the author's first
+    mostly_inherited: bool          # the rebranded-fork pattern, per the rule below
+
+    @property
+    def author_share(self) -> float:
+        return self.author_commits / self.history_commits if self.history_commits else 0.0
+
+    @property
+    def inherited(self) -> int:
+        """Commits in the history that are not the reviewed author's."""
+        return self.history_commits - self.author_commits
+
+
+def _primary_key(c: Commit) -> str:
+    """The identity key of a commit's author of record, same scheme as
+    _author_groups: the email when there is one, else the name."""
+    return (c.email or "").strip().lower() or f"name:{c.author.strip().lower()}"
+
+
+def _normalized_name(name: str) -> str:
+    """'Timothy Carambat' and 'timothycarambat' normalize to the same string."""
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+
+def _author_clusters(commits_in: list[Commit], include_bots: bool = False) -> list[dict]:
+    """Cluster a history's commits by author identity. Each cluster:
+    {keys: set of identity keys, names: Counter of display names,
+     display: most-used name, commits: [Commit]}."""
+    from collections import Counter
+    by_key: dict[str, dict] = {}
+    for c in commits_in:
+        key = _primary_key(c)
+        cl = by_key.setdefault(key, {"keys": {key}, "names": Counter(), "commits": []})
+        cl["names"][c.author] += 1
+        cl["commits"].append(c)
+    clusters: list[dict] = []
+    for key, cl in by_key.items():
+        cl["display"] = cl["names"].most_common(1)[0][0]
+        if not include_bots and _is_bot(cl["display"], key):
+            continue
+        clusters.append(cl)
+    merged: dict[str, dict] = {}
+    for cl in clusters:
+        norm = _normalized_name(cl["display"]) or cl["display"].lower()
+        if norm in merged:
+            m = merged[norm]
+            m["keys"] |= cl["keys"]
+            m["names"] += cl["names"]
+            m["commits"] += cl["commits"]
+            m["display"] = m["names"].most_common(1)[0][0]
+        else:
+            merged[norm] = cl
+    return list(merged.values())
+
+
+def authorship_for(commits_in: list[Commit], author_key: str | None,
+                   include_bots: bool = False) -> Authorship:
+    """Authorship check for one reviewed author within a history.
+
+    author_key is the identity key analyze() selected. An identity that
+    exists only through Co-authored-by trailers has no cluster here - it
+    holds no commits of record - and the check reports exactly that
+    (zero commits, no first-commit date, no flag)."""
+    clusters = _author_clusters(commits_in, include_bots=include_bots)
+    history = sum(len(cl["commits"]) for cl in clusters)
+    author_cl: dict | None = None
+    if author_key:
+        for cl in clusters:
+            if author_key in cl["keys"]:
+                author_cl = cl
+                break
+    own = author_cl["commits"] if author_cl else []
+    others = [cl for cl in clusters if cl is not author_cl]
+    top_others = sorted(((cl["display"], len(cl["commits"])) for cl in others),
+                        key=lambda kv: -kv[1])[:3]
+    all_dates = [c.when.date() for cl in clusters for c in cl["commits"]]
+    history_start = min(all_dates) if all_dates else None
+    author_first = min((c.when.date() for c in own), default=None)
+    inherited_before = 0
+    if author_first is not None:
+        inherited_before = sum(1 for cl in others for c in cl["commits"]
+                               if c.when.date() < author_first)
+    share = len(own) / history if history else 0.0
+    # The flag, stated plainly: the reviewed author wrote a small slice of
+    # the history, and the bulk of the record was already there, written by
+    # other people, before their first commit. That is the shape of a
+    # rebranded fork. Anything else - a minor contributor to a living team
+    # project, a late joiner who then did real work - does not trip it.
+    mostly = (history >= AUTHORSHIP_MIN_HISTORY
+              and author_first is not None
+              and share <= AUTHORSHIP_MAX_SHARE
+              and inherited_before >= AUTHORSHIP_MIN_PREDATING * history)
+    return Authorship(
+        history_commits=history,
+        author_commits=len(own),
+        other_authors=len(others),
+        top_others=top_others,
+        history_start=history_start,
+        author_first=author_first,
+        inherited_before=inherited_before,
+        mostly_inherited=mostly,
+    )
 
 
 def leaderboard(repo: str, commits_in: list[Commit], markers: list[Marker],
@@ -1004,6 +1153,25 @@ def render_terminal(review: Review, previous: dict | None = None) -> str:
         lines.append(f"  Since your last review ({when}): {delta:+.1f} points, {arrow}. "
                      + ("The plan is working." if delta > 0.05 else
                         "The plan has notes." if delta < -0.05 else "Perfectly, suspiciously stable."))
+    a = review.authorship
+    if a is not None and a.history_commits:
+        lines.append("")
+        lines.append("  AUTHORSHIP")
+        lines.append(f"  {a.author_commits} of {a.history_commits} commits in this history "
+                     f"({a.author_share:.0%}) are by {review.author}; "
+                     f"{a.inherited} are by {a.other_authors} other "
+                     f"{'author' if a.other_authors == 1 else 'authors'}.")
+        if a.top_others:
+            leaders = ", ".join(f"{name} ({n})" for name, n in a.top_others)
+            lines.append(f"  Most of the rest: {leaders}.")
+        if a.author_first is not None and a.history_start is not None:
+            lines.append(f"  The history starts {a.history_start}; {review.author}'s first "
+                         f"commit is {a.author_first}, and {a.inherited_before} commits "
+                         f"predate it.")
+        if a.mostly_inherited:
+            lines.append("  Authorship: mostly inherited. The bulk of this record was "
+                         "written by other people before the reviewed author arrived; "
+                         "the grades above describe that record, not one person's work.")
     if review.awards:
         lines.append("")
         lines.append("  AWARDS")
@@ -1047,6 +1215,30 @@ def render_markdown(review: Review) -> str:
                "the work diary every programmer keeps without meaning to. "
                "All findings below are drawn from that record. No code left this machine "
                "in the preparation of this document; the evidence was already here.")
+    a = review.authorship
+    if a is not None and a.history_commits:
+        out.append("")
+        out.append("## Authorship")
+        out.append("")
+        out.append(f"- **Share of the record:** {a.author_commits} of {a.history_commits} "
+                   f"commits in this history ({a.author_share:.0%}) are by {review.author}. "
+                   f"The remaining {a.inherited} are by {a.other_authors} other "
+                   f"{'author' if a.other_authors == 1 else 'authors'}.")
+        if a.top_others:
+            leaders = ", ".join(f"{name} ({n} commits)" for name, n in a.top_others)
+            out.append(f"- **Most of the rest:** {leaders}.")
+        if a.author_first is not None and a.history_start is not None:
+            out.append(f"- **Arrival:** the history starts {a.history_start.isoformat()}; "
+                       f"{review.author}'s first commit is {a.author_first.isoformat()}, "
+                       f"and {a.inherited_before} commits predate it.")
+        if a.mostly_inherited:
+            out.append("- **Authorship: mostly inherited.** The bulk of this record was "
+                       "written by other people before the reviewed author arrived. "
+                       "The grades in this review describe that record, not one "
+                       "person's work, and should be read that way.")
+        else:
+            out.append("- **Authorship: no concerns.** This record is substantially "
+                       "the reviewed author's own work, as a review assumes.")
     for c in review.categories:
         out.append("")
         out.append(f"## {c.name}: {c.letter} ({c.score:.0f}/100)")
@@ -1448,6 +1640,14 @@ def render_scan(results: list[tuple[str, Review]], root_name: str) -> str:
 
 
 def render_html(review: Review) -> str:
+    auth = ""
+    a = review.authorship
+    if a is not None and a.history_commits:
+        flag = (" <strong>Authorship: mostly inherited.</strong>" if a.mostly_inherited else "")
+        auth = (f'<div class="auth">Authorship: {a.author_commits} of {a.history_commits} '
+                f'commits ({a.author_share:.0%}) are by {html.escape(review.author)}; '
+                f'{a.inherited} are by {a.other_authors} other '
+                f'{"author" if a.other_authors == 1 else "authors"}.{flag}</div>\n')
     rows = ""
     for c in review.categories:
         color = GRADE_COLORS[c.letter]
@@ -1472,6 +1672,7 @@ def render_html(review: Review) -> str:
   .cat {{ width:130px; font-weight:bold; font-size:14px; padding-top:3px; }}
   .grade {{ color:#fff; font-weight:bold; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none; }}
   .ev {{ font-size:13px; color:#333; }}
+  .auth {{ font-size:13px; color:#333; border-bottom:1px dotted #bbb; padding:0 0 9px; margin-bottom:5px; }}
   .foot {{ margin-top:18px; font-size:12px; color:#777; text-align:center; }}
 </style></head><body>
 <div class="card">
@@ -1480,7 +1681,7 @@ def render_html(review: Review) -> str:
   {review.total_commits} commits reviewed &nbsp;|&nbsp; {review.span_start.isoformat()} to {review.span_end.isoformat()}</div>
   <div class="overall"><div class="big">{review.overall_letter}</div>
   <div class="verdict">"{html.escape(verdict_for(review))}"</div></div>
-{rows}{awards_html(review)}
+{auth}{rows}{awards_html(review)}
   <div class="foot">Generated locally by PIP from the employee's own git history. Nothing was uploaded. Not for employment decisions.<br>
   pip install on-a-pip</div>
 </div></body></html>
@@ -1500,6 +1701,21 @@ def review_to_json(review: Review) -> dict:
             for c in review.categories
         ],
         "awards": [{"title": t, "reason": r} for t, r in review.awards],
+        "authorship": (None if review.authorship is None else {
+            "history_commits": review.authorship.history_commits,
+            "author_commits": review.authorship.author_commits,
+            "author_share": round(review.authorship.author_share, 4),
+            "other_authors": review.authorship.other_authors,
+            "top_others": [{"name": n, "commits": c}
+                           for n, c in review.authorship.top_others],
+            "history_start": (review.authorship.history_start.isoformat()
+                              if review.authorship.history_start else None),
+            "author_first": (review.authorship.author_first.isoformat()
+                             if review.authorship.author_first else None),
+            "inherited_commits": review.authorship.inherited,
+            "inherited_before_author": review.authorship.inherited_before,
+            "mostly_inherited": review.authorship.mostly_inherited,
+        }),
         "persona": review.persona,
         "highlights": {k: v for k, v in review.highlights.items()},
     }

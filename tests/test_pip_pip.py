@@ -1084,3 +1084,225 @@ class V11FixTest(unittest.TestCase):
                                     pip_pip.collect_markers(repo), date.today())
         counts = sorted(r.total_commits for r in board if r.author == "Sam Dev")
         self.assertEqual(counts, [5, 8])
+
+
+class AuthorshipTest(unittest.TestCase):
+    """The authorship check: how much of a history is the reviewed
+    author's own work. Fixtures are scripted so every number is a known
+    answer, including the rebranded-fork pattern that prompted the check:
+    a long upstream history under other names, one late commit by the
+    reviewed author."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.repo = os.path.join(cls.tmp, "inherited")
+        make_repo(cls.repo)
+        upstream = ([("Timothy Carambat", "timothy@example.com")] * 20
+                    + [("timothycarambat", "tc@example.net")] * 12
+                    + [("Marcello Fitton", "marcello@example.com")] * 8)
+        for i, (name, email) in enumerate(upstream):
+            commit(cls.repo, at(400 - i, 10), f"upstream feature work number {i}",
+                   author=f"{name} <{email}>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        commit(cls.repo, at(5, 10), "Update README.md",
+               author="Steven Leake <steven@example.com>",
+               append={"a.py": "# readme\n"})
+        cls.review = cls._filtered(cls.repo, "Steven Leake")
+
+    @staticmethod
+    def _filtered(repo, author_filter, **kw):
+        commits = pip_pip.collect_commits(repo, 10000)
+        markers = pip_pip.collect_markers(repo)
+        return pip_pip.analyze(repo, commits, markers, author_filter,
+                               date.today(), **kw)
+
+    def test_inherited_history_numbers(self):
+        a = self.review.authorship
+        self.assertIsNotNone(a)
+        self.assertEqual(a.history_commits, 41)
+        self.assertEqual(a.author_commits, 1)
+        self.assertAlmostEqual(a.author_share, 1 / 41)
+        self.assertEqual(a.inherited, 40)
+        self.assertEqual(a.inherited_before, 40)
+        self.assertEqual(a.author_first, date.today() - timedelta(days=5))
+        self.assertEqual(a.history_start, date.today() - timedelta(days=400))
+
+    def test_name_variants_merge_in_histogram(self):
+        a = self.review.authorship
+        # "Timothy Carambat" (20) and "timothycarambat" (12) are one author.
+        self.assertEqual(a.other_authors, 2)
+        self.assertEqual(a.top_others[0], ("Timothy Carambat", 32))
+        self.assertEqual(a.top_others[1], ("Marcello Fitton", 8))
+
+    def test_inherited_history_is_flagged(self):
+        self.assertTrue(self.review.authorship.mostly_inherited)
+
+    def test_flag_is_additive_not_a_score(self):
+        # The check describes the record; the five categories and the
+        # overall remain exactly their mean, untouched by the flag.
+        scores = [c.score for c in self.review.categories]
+        self.assertEqual(len(scores), 5)
+        self.assertAlmostEqual(self.review.overall_score, sum(scores) / 5)
+
+    def test_authorship_reaches_the_surfaces(self):
+        self.assertIn("AUTHORSHIP", pip_pip.render_terminal(self.review))
+        self.assertIn("mostly inherited", pip_pip.render_terminal(self.review))
+        self.assertIn("## Authorship", pip_pip.render_markdown(self.review))
+        self.assertIn("Authorship:", pip_pip.render_html(self.review))
+        data = pip_pip.review_to_json(self.review)
+        self.assertEqual(data["authorship"]["author_commits"], 1)
+        self.assertTrue(data["authorship"]["mostly_inherited"])
+
+    def test_single_author_full_share_no_flag(self):
+        repo = os.path.join(self.tmp, "solo")
+        make_repo(repo)
+        for i in range(25):
+            commit(repo, at(100 - i * 3, 10), f"solo feature work number {i}",
+                   author="Solo Dev <solo@example.com>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        a = review_of(repo).authorship
+        self.assertEqual(a.history_commits, 25)
+        self.assertEqual(a.author_share, 1.0)
+        self.assertEqual(a.other_authors, 0)
+        self.assertEqual(a.top_others, [])
+        self.assertEqual(a.inherited_before, 0)
+        self.assertFalse(a.mostly_inherited)
+
+    def test_reviewed_author_name_variants_combine(self):
+        repo = os.path.join(self.tmp, "variants")
+        make_repo(repo)
+        plan = ([("Timothy Carambat", "timothy@example.com")] * 12
+                + [("timothycarambat", "tc@example.net")] * 8
+                + [("Other Dev", "other@example.com")] * 5)
+        for i, (name, email) in enumerate(plan):
+            commit(repo, at(200 - i * 4, 10), f"variant history work number {i}",
+                   author=f"{name} <{email}>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        a = review_of(repo).authorship
+        # The grader's top identity holds 12; the check sees one person: 20.
+        self.assertEqual(a.author_commits, 20)
+        self.assertAlmostEqual(a.author_share, 20 / 25)
+        self.assertEqual(a.other_authors, 1)
+        self.assertFalse(a.mostly_inherited)
+
+    def test_small_history_never_flags(self):
+        repo = os.path.join(self.tmp, "small")
+        make_repo(repo)
+        for i in range(9):
+            commit(repo, at(100 - i * 5, 10), f"early upstream work number {i}",
+                   author="Upstream Dev <up@example.com>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        commit(repo, at(5, 10), "late readme update",
+               author="Late Dev <late@example.com>", append={"a.py": "# r\n"})
+        a = self._filtered(repo, "Late Dev").authorship
+        self.assertEqual(a.history_commits, 10)
+        self.assertAlmostEqual(a.author_share, 0.10)
+        self.assertEqual(a.inherited_before, 9)
+        self.assertFalse(a.mostly_inherited)  # under the 20-commit floor
+
+    def test_late_pileup_does_not_flag(self):
+        # The reviewed author was here first; the crowd arrived after.
+        # Small share, but nothing predates them, so no flag.
+        repo = os.path.join(self.tmp, "pileup")
+        make_repo(repo)
+        commit(repo, at(400, 10), "founding commit with real explanation",
+               author="Founder Dev <founder@example.com>", files={"a.py": "x\n"})
+        commit(repo, at(390, 10), "second founding commit with explanation",
+               author="Founder Dev <founder@example.com>", append={"a.py": "# 2\n"})
+        for i in range(28):
+            commit(repo, at(60 - i, 10), f"crowd contribution number {i}",
+                   author="Crowd Dev <crowd@example.com>",
+                   append={"a.py": f"# c{i}\n"})
+        a = self._filtered(repo, "Founder Dev").authorship
+        self.assertEqual(a.history_commits, 30)
+        self.assertAlmostEqual(a.author_share, 2 / 30)
+        self.assertEqual(a.inherited_before, 0)
+        self.assertFalse(a.mostly_inherited)
+
+    def test_interleaved_minor_contributor_no_flag(self):
+        repo = os.path.join(self.tmp, "interleaved")
+        make_repo(repo)
+        for i in range(10):
+            commit(repo, at(100 - i, 10), f"early team work number {i}",
+                   author="Team Dev <team@example.com>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# t{i}\n"} if i > 0 else None)
+        for i in range(20):
+            who = ("Minor Dev <minor@example.com>" if i % 7 == 0
+                   else "Team Dev <team@example.com>")
+            commit(repo, at(89 - i, 10), f"shared project work number {i}",
+                   author=who, append={"a.py": f"# s{i}\n"})
+        a = self._filtered(repo, "Minor Dev").authorship
+        self.assertEqual(a.author_commits, 3)
+        self.assertEqual(a.inherited_before, 10)  # under half of 30
+        self.assertFalse(a.mostly_inherited)
+
+    def test_merge_commits_count_for_their_author(self):
+        repo = os.path.join(self.tmp, "merges")
+        make_repo(repo)
+        for i in range(10):
+            commit(repo, at(60 - i, 10), f"main line work number {i}",
+                   author="Merge Dev <merge@example.com>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# m{i}\n"} if i > 0 else None)
+        _run(repo, "checkout", "-q", "-b", "feat")
+        for i in range(3):
+            commit(repo, at(50 - i, 11), f"branch work number {i}",
+                   author="Other Dev <other@example.com>",
+                   files={"b.py": "y\n"} if i == 0 else None,
+                   append={"b.py": f"# b{i}\n"} if i > 0 else None)
+        _run(repo, "checkout", "-q", "-")  # back to the default branch
+        commit(repo, at(47, 10), "one more main line change",
+               author="Merge Dev <merge@example.com>", append={"a.py": "# pre\n"})
+        when = at(46, 10).isoformat()
+        _run(repo, "merge", "-q", "--no-ff", "-m", "Merge branch feat", "feat",
+             env_extra={"GIT_AUTHOR_NAME": "Merge Dev",
+                        "GIT_AUTHOR_EMAIL": "merge@example.com",
+                        "GIT_COMMITTER_NAME": "Merge Dev",
+                        "GIT_COMMITTER_EMAIL": "merge@example.com",
+                        "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+        commits = pip_pip.collect_commits(repo, 10000)
+        self.assertTrue(any(c.parents >= 2 for c in commits))  # fixture has a merge
+        a = review_of(repo).authorship
+        self.assertEqual(a.history_commits, 15)
+        self.assertEqual(a.author_commits, 12)  # 11 regular + the merge itself
+        self.assertFalse(a.mostly_inherited)
+
+    def test_coauthor_only_identity_reports_zero(self):
+        repo = os.path.join(self.tmp, "coauthor")
+        make_repo(repo)
+        for i in range(5):
+            commit(repo, at(50 - i * 5, 10), f"paired work number {i}",
+                   body="Done together.\n\nCo-authored-by: Ghost Writer <ghost@example.com>",
+                   author="Main Dev <main@example.com>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        a = self._filtered(repo, "Ghost Writer").authorship
+        self.assertEqual(a.history_commits, 5)
+        self.assertEqual(a.author_commits, 0)
+        self.assertIsNone(a.author_first)
+        self.assertFalse(a.mostly_inherited)
+
+    def test_bots_excluded_unless_review_includes_them(self):
+        repo = os.path.join(self.tmp, "bots")
+        make_repo(repo)
+        for i in range(20):
+            commit(repo, at(100 - i * 2, 10), f"human work number {i}",
+                   author="Human Dev <human@example.com>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# h{i}\n"} if i > 0 else None)
+        for i in range(10):
+            commit(repo, at(59 - i * 2, 10), f"dependency update number {i}",
+                   author="dependabot[bot] <dependabot@example.com>",
+                   append={"a.py": f"# d{i}\n"})
+        a = review_of(repo).authorship
+        self.assertEqual(a.history_commits, 20)
+        self.assertEqual(a.author_share, 1.0)
+        a2 = review_of(repo, include_bots=True).authorship
+        self.assertEqual(a2.history_commits, 30)
+        self.assertEqual(a2.other_authors, 1)

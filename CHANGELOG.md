@@ -3,6 +3,22 @@
 All notable changes to PIP (PyPI: `on-a-pip`) are recorded here. Versions are
 the tool's own; the record is the record.
 
+## Unreleased
+
+- **Authorship check.** Every review gains an Authorship section (terminal,
+  Markdown, HTML card, and JSON): the reviewed author's share of the
+  history's commits, the other authors ranked, the history's start against
+  the author's first commit, and how much of the record predates them.
+  When the share is at most 10% and at least half the history was written
+  by others before the author's first commit (in a history of 20+
+  commits), the report flags it: "Authorship: mostly inherited." That is
+  the shape of a rebranded fork, and the review now says so instead of
+  quietly grading somebody else's work. Identities cluster by email with
+  mailmap applied, and name variants ("Timothy Carambat" /
+  "timothycarambat") merge into one author. The check is descriptive
+  only: no score, grade, or award changes, and reviews of record
+  reproduce exactly as before.
+
 ## 1.2.0
 
 - `--wrapped-kit DIR`: a share kit for the year. Writes the Wrapped card
