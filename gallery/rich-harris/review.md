@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 3964 of 9293 commits in this history (43%) are by Rich Harris. The remaining 5329 are by 947 other authors.
+- **Most of the rest:** Simon H (765 commits), Conduitry (722 commits), Dominic Gannaway (497 commits).
+- **Arrival:** the history starts 2017-08-20; Rich Harris's first commit is 2017-08-20, and 0 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: A (96/100)
 
 - 216 of 3080 commit messages (7%) say almost nothing (average message length: 38 characters).

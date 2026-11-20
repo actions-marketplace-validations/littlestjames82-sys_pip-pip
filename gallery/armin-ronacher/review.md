@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 1191 of 5374 commits in this history (22%) are by Armin Ronacher. The remaining 4183 are by 830 other authors.
+- **Most of the rest:** David Lord (1865 commits), Markus Unterwaditzer (274 commits), Ron DuPlain (122 commits).
+- **Arrival:** the history starts 2010-04-06; Armin Ronacher's first commit is 2010-04-06, and 0 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: A (99/100)
 
 - 18 of 1189 commit messages (2%) say almost nothing (average message length: 41 characters).

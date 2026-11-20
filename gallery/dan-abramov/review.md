@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 1603 of 21702 commits in this history (7%) are by Dan Abramov. The remaining 20099 are by 1940 other authors.
+- **Most of the rest:** Sebastian Markbåge (1939 commits), Paul O’Shannessy (1778 commits), Brian Vaughn (1736 commits).
+- **Arrival:** the history starts 2013-05-28; Dan Abramov's first commit is 2014-05-26, and 2352 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: A (100/100)
 
 - 35 of 1595 commit messages (2%) say almost nothing (average message length: 44 characters).

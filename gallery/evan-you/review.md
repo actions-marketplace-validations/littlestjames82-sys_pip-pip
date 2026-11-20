@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 3576 of 6180 commits in this history (58%) are by Evan You. The remaining 2604 are by 646 other authors.
+- **Most of the rest:** edison (406 commits), 三咲智子 Kevin Deng (110 commits), HcySunYang (91 commits).
+- **Arrival:** the history starts 2018-09-19; Evan You's first commit is 2018-09-19, and 0 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: A (100/100)
 
 - 21 of 3371 commit messages (1%) say almost nothing (average message length: 46 characters).

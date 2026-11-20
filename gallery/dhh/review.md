@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 258 of 29998 commits in this history (1%) are by David Heinemeier Hansson. The remaining 29740 are by 2386 other authors.
+- **Most of the rest:** Jean Boussier (3071 commits), Ryuta Kamizono (2779 commits), Rafael Mendonça França (2300 commits).
+- **Arrival:** the history starts 2010-01-02; David Heinemeier Hansson's first commit is 2018-12-03, and 87 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: A (100/100)
 
 - 2 of 145 commit messages (1%) say almost nothing (average message length: 49 characters).

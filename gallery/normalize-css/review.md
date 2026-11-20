@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 10 of 360 commits in this history (3%) are by battaglr. The remaining 350 are by 41 other authors.
+- **Most of the rest:** Nicolas Gallagher (208 commits), Jonathan Neal (95 commits), Aleks Hudochenkov (4 commits).
+- **Arrival:** the history starts 2011-04-21; battaglr's first commit is 2015-04-02, and 238 commits predate it.
+- **Authorship: mostly inherited.** The bulk of this record was written by other people before the reviewed author arrived. The grades in this review describe that record, not one person's work, and should be read that way.
+
 ## Communication: A (100/100)
 
 - 0 of 10 commit messages (0%) say almost nothing (average message length: 35 characters).

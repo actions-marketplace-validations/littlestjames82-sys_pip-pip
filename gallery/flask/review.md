@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 1865 of 4808 commits in this history (39%) are by David Lord. The remaining 2943 are by 799 other authors.
+- **Most of the rest:** Armin Ronacher (733 commits), Markus Unterwaditzer (274 commits), Ron DuPlain (117 commits).
+- **Arrival:** the history starts 2010-11-03; David Lord's first commit is 2015-10-30, and 1796 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: A (100/100)
 
 - 22 of 1870 commit messages (1%) say almost nothing (average message length: 42 characters).

@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 999 of 2236 commits in this history (45%) are by Sebastián Ramírez. The remaining 1237 are by 439 other authors.
+- **Most of the rest:** Nils Lindemann (129 commits), Motov Yurii (128 commits), Alejandra (64 commits).
+- **Arrival:** the history starts 2023-08-14; Sebastián Ramírez's first commit is 2023-08-14, and 0 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: A (100/100)
 
 - 0 of 1209 commit messages (0%) say almost nothing (average message length: 57 characters).

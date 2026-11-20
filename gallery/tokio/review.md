@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 357 of 4879 commits in this history (7%) are by Alex Crichton. The remaining 4522 are by 1094 other authors.
+- **Most of the rest:** Alice Ryhl (714 commits), Carl Lerche (649 commits), Taiki Endo (172 commits).
+- **Arrival:** the history starts 2016-07-30; Alex Crichton's first commit is 2016-07-30, and 0 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: A (100/100)
 
 - 2 of 357 commit messages (1%) say almost nothing (average message length: 36 characters).

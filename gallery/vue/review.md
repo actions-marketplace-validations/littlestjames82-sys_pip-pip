@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 47 of 3460 commits in this history (1%) are by Hanks. The remaining 3413 are by 375 other authors.
+- **Most of the rest:** Evan You (2583 commits), Eduardo San Martin Morote (43 commits), chengchao (37 commits).
+- **Arrival:** the history starts 2016-04-10; Hanks's first commit is 2016-12-09, and 1430 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: A (100/100)
 
 - 0 of 47 commit messages (0%) say almost nothing (average message length: 62 characters).

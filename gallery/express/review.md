@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 2788 of 4940 commits in this history (56%) are by Tj Holowaychuk. The remaining 2152 are by 376 other authors.
+- **Most of the rest:** Douglas Christopher Wilson (1232 commits), Jonathan Ong (84 commits), Roman Shtylman (70 commits).
+- **Arrival:** the history starts 2010-04-10; Tj Holowaychuk's first commit is 2010-04-11, and 1 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: B (87/100)
 
 - 348 of 2788 commit messages (12%) say almost nothing (average message length: 29 characters).

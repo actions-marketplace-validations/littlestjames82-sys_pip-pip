@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 1 of 1625 commits in this history (0%) are by Steven Leake. The remaining 1624 are by 165 other authors.
+- **Most of the rest:** timothycarambat (1017 commits), Sean Hatfield (356 commits), Marcello Fitton (16 commits).
+- **Arrival:** the history starts 2023-06-03; Steven Leake's first commit is 2026-01-20, and 1624 commits predate it.
+- **Authorship: mostly inherited.** The bulk of this record was written by other people before the reviewed author arrived. The grades in this review describe that record, not one person's work, and should be read that way.
+
 ## Communication: A (100/100)
 
 - 0 of 1 commit messages (0%) say almost nothing (average message length: 16 characters).

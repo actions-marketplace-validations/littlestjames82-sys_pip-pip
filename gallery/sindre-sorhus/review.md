@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 1000 of 1615 commits in this history (62%) are by Sindre Sorhus. The remaining 615 are by 226 other authors.
+- **Most of the rest:** Som Shekhar Mukherjee (139 commits), Haozheng Li (63 commits), skarab42 (21 commits).
+- **Arrival:** the history starts 2019-03-13; Sindre Sorhus's first commit is 2019-03-13, and 0 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: B (81/100)
 
 - 226 of 1135 commit messages (20%) say almost nothing (average message length: 44 characters).

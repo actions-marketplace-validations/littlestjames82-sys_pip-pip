@@ -14,6 +14,13 @@
 
 This review is based entirely on the employee's own git history, the work diary every programmer keeps without meaning to. All findings below are drawn from that record. No code left this machine in the preparation of this document; the evidence was already here.
 
+## Authorship
+
+- **Share of the record:** 162 of 6992 commits in this history (2%) are by Guillermo Rauch. The remaining 6830 are by 1322 other authors.
+- **Most of the rest:** Tim Neutkens (1167 commits), Joe Haddad (1104 commits), JJ Kasper (827 commits).
+- **Arrival:** the history starts 2016-10-05; Guillermo Rauch's first commit is 2016-10-05, and 0 commits predate it.
+- **Authorship: no concerns.** This record is substantially the reviewed author's own work, as a review assumes.
+
 ## Communication: A (97/100)
 
 - 5 of 162 commit messages (3%) say almost nothing (average message length: 20 characters).
