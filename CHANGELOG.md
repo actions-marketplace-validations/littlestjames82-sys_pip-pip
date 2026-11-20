@@ -3,6 +3,25 @@
 All notable changes to PIP (PyPI: `on-a-pip`) are recorded here. Versions are
 the tool's own; the record is the record.
 
+## 1.4.0 (Nov 20, 2026)
+
+- **Authorship badge.** The 1.3.0 authorship check becomes a badge a
+  README can carry: `render_authorship_badge` draws a shields-style SVG
+  ("authorship" / "94% self-authored") next to the grade badge. The
+  percent rounds half up on the exact commit fraction, and the color
+  follows the true share: bright green at 90% and up, through yellow
+  green, yellow, and orange, down to red under 10%. A mostly inherited
+  history says so instead, in red, whatever the share; a review with no
+  authorship data reads "no data" in grey. `--authorship-badge FILE`
+  writes the SVG, `--authorship-badge-json FILE` writes the shields.io
+  endpoint JSON for anyone who would rather let shields render it, and
+  `--readme` now writes `pip-authorship-badge.svg` into the repo and
+  adds its image line to the PIP section, right under the grade badge.
+  The `--json` output gains an additive `authorship_badge` key with the
+  same message and colors, so the SVG, the endpoint, and the JSON can
+  never disagree. Nothing else changes: reviews of record reproduce
+  exactly as before.
+
 ## 1.3.0 (Nov 20, 2026)
 
 - **Authorship check.** Every review gains an Authorship section (terminal,

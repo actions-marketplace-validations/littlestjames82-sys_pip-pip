@@ -29,8 +29,9 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 # --------------------------------------------------------------------------
 # git collection (read-only)
@@ -1510,6 +1511,65 @@ def render_badge(review: Review) -> str:
 """
 
 
+# Authorship badge bands, on the true share: (floor, hex, shields name).
+_AUTHORSHIP_BANDS = (
+    (0.90, "#4c1", "brightgreen"),
+    (0.70, "#97ca00", "yellowgreen"),
+    (0.40, "#dfb317", "yellow"),
+    (0.10, "#fe7d37", "orange"),
+)
+
+
+def _authorship_percent(a: Authorship) -> int:
+    """The author's share as a whole percent, rounded half up on the
+    exact commit fraction: 189 of 200 is 94.5%, and it reads 95%,
+    never the 94% that float truncation or banker's rounding gives."""
+    if not a.history_commits:
+        return 0
+    exact = Decimal(a.author_commits) * 100 / Decimal(a.history_commits)
+    return int(exact.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _authorship_badge_data(review: Review) -> tuple[str, str, str]:
+    """(message, hex color, shields color name) for the authorship
+    badge. One source of truth for the SVG, the endpoint JSON, and
+    the --json output, so the three can never disagree."""
+    a = review.authorship
+    if a is None:
+        return "no data", "#9f9f9f", "lightgrey"
+    if a.mostly_inherited:
+        return "mostly inherited", "#e05d44", "red"
+    message = f"{_authorship_percent(a)}% self-authored"
+    for floor, hex_color, name in _AUTHORSHIP_BANDS:
+        if a.author_share >= floor:
+            return message, hex_color, name
+    return message, "#e05d44", "red"
+
+
+def render_authorship_badge(review: Review) -> str:
+    """A small shields-style authorship badge for a README: how much of
+    this history the reviewed author actually wrote."""
+    message, color, _name = _authorship_badge_data(review)
+    label = "authorship"
+    label_w, value_w = 12 + 8 * len(label), 12 + 8 * len(message)
+    total = label_w + value_w
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{total}" height="20" role="img" aria-label="Authorship: {message}">
+  <rect width="{label_w}" height="20" fill="#555"/>
+  <rect x="{label_w}" width="{value_w}" height="20" fill="{color}"/>
+  <text x="{label_w / 2}" y="14" font-family="Verdana, sans-serif" font-size="11" fill="#fff" text-anchor="middle">authorship</text>
+  <text x="{label_w + value_w / 2}" y="14" font-family="Verdana, sans-serif" font-size="11" fill="#fff" text-anchor="middle">{message}</text>
+</svg>
+"""
+
+
+def authorship_badge_endpoint(review: Review) -> dict:
+    """The shields.io endpoint object for the authorship badge, for
+    anyone who would rather let shields.io render it."""
+    message, _hex, name = _authorship_badge_data(review)
+    return {"schemaVersion": 1, "label": "authorship",
+            "message": message, "color": name}
+
+
 def pair_stats(commits_in: list[Commit], top: int = 3) -> list[tuple[str, str, int]]:
     """Author pairs ranked by shared active days: who ships together."""
     days: dict[str, set] = {}
@@ -1689,6 +1749,7 @@ def render_html(review: Review) -> str:
 
 
 def review_to_json(review: Review) -> dict:
+    badge_message, badge_hex, badge_name = _authorship_badge_data(review)
     return {
         "tool": "on-a-pip", "version": __version__,
         "repo": review.repo_name, "author": review.author,
@@ -1714,6 +1775,12 @@ def review_to_json(review: Review) -> dict:
                              if review.authorship.author_first else None),
             "inherited_commits": review.authorship.inherited,
             "inherited_before_author": review.authorship.inherited_before,
+            "mostly_inherited": review.authorship.mostly_inherited,
+        }),
+        "authorship_badge": (None if review.authorship is None else {
+            "message": badge_message,
+            "color": badge_hex,
+            "color_name": badge_name,
             "mostly_inherited": review.authorship.mostly_inherited,
         }),
         "persona": review.persona,
@@ -1748,12 +1815,14 @@ README_END = "<!-- pip:end -->"
 
 
 def render_readme_section(review: Review, card_file: str = "pip-card.svg",
-                          badge_file: str = "pip-badge.svg") -> str:
+                          badge_file: str = "pip-badge.svg",
+                          authorship_badge_file: str = "pip-authorship-badge.svg") -> str:
     award = review.awards[0][0] if review.awards else "None yet"
     return (
         f"{README_START}\n"
         f"## My PIP review\n\n"
         f"![My PIP grade]({badge_file})\n\n"
+        f"![Authorship]({authorship_badge_file})\n\n"
         f"![PIP report card]({card_file})\n\n"
         f"**Grade: {review.overall_letter} ({review.overall_score:.0f}/100)** · "
         f"{review.total_commits} commits reviewed · Top award: {award} · "
@@ -1765,17 +1834,20 @@ def render_readme_section(review: Review, card_file: str = "pip-card.svg",
 
 
 def update_readme(repo: str, review: Review) -> tuple[str, str, str]:
-    """Write the card and badge into the repo and insert or refresh the
+    """Write the card and badges into the repo and insert or refresh the
     marked PIP section in its README. Returns (readme, card, badge) paths."""
     readme = os.path.join(repo, "README.md")
     if not os.path.isfile(readme):
         raise PipError("no README.md in this repository to write the review into")
     card = os.path.join(repo, "pip-card.svg")
     badge = os.path.join(repo, "pip-badge.svg")
+    authorship_badge = os.path.join(repo, "pip-authorship-badge.svg")
     with open(card, "w", encoding="utf-8") as f:
         f.write(render_svg(review))
     with open(badge, "w", encoding="utf-8") as f:
         f.write(render_badge(review))
+    with open(authorship_badge, "w", encoding="utf-8") as f:
+        f.write(render_authorship_badge(review))
     section = render_readme_section(review)
     with open(readme, encoding="utf-8") as f:
         text = f.read()
@@ -2059,6 +2131,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--html", metavar="FILE", help="write the shareable report card as HTML")
     ap.add_argument("--svg", metavar="FILE", help="write the shareable report card as SVG (embeds in READMEs)")
     ap.add_argument("--badge", metavar="FILE", help="write a small grade badge as SVG")
+    ap.add_argument("--authorship-badge", metavar="FILE", help="write a small authorship badge as SVG")
+    ap.add_argument("--authorship-badge-json", metavar="FILE",
+                    help="write the authorship badge as a shields.io endpoint JSON")
     ap.add_argument("--json", action="store_true", help="print the review as JSON instead of the summary")
     ap.add_argument("--version", action="version", version=f"on-a-pip {__version__}")
     args = ap.parse_args(argv)
@@ -2284,6 +2359,15 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.badge, "w", encoding="utf-8") as f:
             f.write(render_badge(review))
         print(f"Badge written to {args.badge}")
+    if args.authorship_badge:
+        with open(args.authorship_badge, "w", encoding="utf-8") as f:
+            f.write(render_authorship_badge(review))
+        print(f"Authorship badge written to {args.authorship_badge}")
+    if args.authorship_badge_json:
+        with open(args.authorship_badge_json, "w", encoding="utf-8") as f:
+            json.dump(authorship_badge_endpoint(review), f, indent=2)
+            f.write("\n")
+        print(f"Authorship badge endpoint JSON written to {args.authorship_badge_json}")
     if args.reference:
         with open(args.reference, "w", encoding="utf-8") as f:
             f.write(render_reference(review))

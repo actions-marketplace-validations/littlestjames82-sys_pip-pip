@@ -1306,3 +1306,201 @@ class AuthorshipTest(unittest.TestCase):
         a2 = review_of(repo, include_bots=True).authorship
         self.assertEqual(a2.history_commits, 30)
         self.assertEqual(a2.other_authors, 1)
+
+
+class AuthorshipBadgeTest(unittest.TestCase):
+    """The authorship badge: the 1.3.0 check as a shields-style SVG,
+    an endpoint JSON, and a line in the README section. Fixtures mirror
+    AuthorshipTest: the rebranded-fork pattern (41 commits, 1 by the
+    reviewed author) and a solo history (25 commits, all their own)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.inherited_repo = os.path.join(cls.tmp, "inherited")
+        make_repo(cls.inherited_repo)
+        upstream = ([("Timothy Carambat", "timothy@example.com")] * 20
+                    + [("timothycarambat", "tc@example.net")] * 12
+                    + [("Marcello Fitton", "marcello@example.com")] * 8)
+        for i, (name, email) in enumerate(upstream):
+            commit(cls.inherited_repo, at(400 - i, 10),
+                   f"upstream feature work number {i}",
+                   author=f"{name} <{email}>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        commit(cls.inherited_repo, at(5, 10), "Update README.md",
+               author="Steven Leake <steven@example.com>",
+               append={"a.py": "# readme\n"})
+        commits = pip_pip.collect_commits(cls.inherited_repo, 10000)
+        markers = pip_pip.collect_markers(cls.inherited_repo)
+        cls.inherited_review = pip_pip.analyze(
+            cls.inherited_repo, commits, markers, "Steven Leake", date.today())
+
+        cls.solo_repo = os.path.join(cls.tmp, "solo")
+        make_repo(cls.solo_repo)
+        for i in range(25):
+            commit(cls.solo_repo, at(100 - i * 3, 10),
+                   f"solo feature work number {i}",
+                   author="Solo Dev <solo@example.com>",
+                   files={"a.py": "x\n"} if i == 0 else None,
+                   append={"a.py": f"# {i}\n"} if i > 0 else None)
+        cls.solo_review = review_of(cls.solo_repo)
+
+    def _review_with(self, author_commits, history_commits, mostly_inherited=False):
+        """The solo review wearing a synthetic Authorship with an exact
+        known share, so band edges are known answers."""
+        review = review_of(self.solo_repo)
+        review.authorship = pip_pip.Authorship(
+            history_commits=history_commits, author_commits=author_commits,
+            other_authors=1, top_others=[("Other Dev", history_commits - author_commits)],
+            history_start=None, author_first=None,
+            inherited_before=0, mostly_inherited=mostly_inherited)
+        return review
+
+    def test_self_authored_fixture_badge(self):
+        badge = pip_pip.render_authorship_badge(self.solo_review)
+        self.assertIn("authorship", badge)
+        self.assertIn("100% self-authored", badge)
+        self.assertIn('fill="#4c1"', badge)
+        self.assertIn('aria-label="Authorship: 100% self-authored"', badge)
+
+    def test_inherited_fixture_badge(self):
+        badge = pip_pip.render_authorship_badge(self.inherited_review)
+        self.assertIn("mostly inherited", badge)
+        self.assertIn('fill="#e05d44"', badge)
+        self.assertIn('aria-label="Authorship: mostly inherited"', badge)
+        self.assertNotIn("self-authored", badge)
+
+    def test_band_boundaries(self):
+        # (author, history, expected message, expected hex). Bands sit on
+        # the true share; the displayed percent is rounded half up, so
+        # 899/1000 displays 90% but keeps the 70% band's color.
+        cases = [
+            (100, 100, "100% self-authored", "#4c1"),
+            (90, 100, "90% self-authored", "#4c1"),
+            (899, 1000, "90% self-authored", "#97ca00"),
+            (70, 100, "70% self-authored", "#97ca00"),
+            (699, 1000, "70% self-authored", "#dfb317"),
+            (40, 100, "40% self-authored", "#dfb317"),
+            (399, 1000, "40% self-authored", "#fe7d37"),
+            (10, 100, "10% self-authored", "#fe7d37"),
+            (99, 1000, "10% self-authored", "#e05d44"),
+            (5, 100, "5% self-authored", "#e05d44"),
+            (0, 100, "0% self-authored", "#e05d44"),
+        ]
+        for author, history, message, hex_color in cases:
+            with self.subTest(author=author, history=history):
+                badge = pip_pip.render_authorship_badge(
+                    self._review_with(author, history))
+                self.assertIn(message, badge)
+                self.assertIn(f'fill="{hex_color}"', badge)
+
+    def test_percent_rounds_half_up(self):
+        # 189/200 is exactly 94.5%: half up reads 95, and the band still
+        # follows the true share (94.5% is the bright-green band).
+        badge = pip_pip.render_authorship_badge(self._review_with(189, 200))
+        self.assertIn("95% self-authored", badge)
+        self.assertIn('fill="#4c1"', badge)
+        badge = pip_pip.render_authorship_badge(self._review_with(944, 1000))
+        self.assertIn("94% self-authored", badge)
+
+    def test_mostly_inherited_beats_the_band(self):
+        # Even at a 95% share, the inherited flag owns the message.
+        badge = pip_pip.render_authorship_badge(
+            self._review_with(95, 100, mostly_inherited=True))
+        self.assertIn("mostly inherited", badge)
+        self.assertIn('fill="#e05d44"', badge)
+        self.assertNotIn("self-authored", badge)
+
+    def test_no_authorship_is_no_data(self):
+        review = review_of(self.solo_repo)
+        review.authorship = None
+        badge = pip_pip.render_authorship_badge(review)
+        self.assertIn("no data", badge)
+        self.assertIn('fill="#9f9f9f"', badge)
+        self.assertIn('aria-label="Authorship: no data"', badge)
+
+    def test_badge_is_deterministic(self):
+        self.assertEqual(pip_pip.render_authorship_badge(self.inherited_review),
+                         pip_pip.render_authorship_badge(self.inherited_review))
+        self.assertEqual(pip_pip.render_authorship_badge(self.solo_review),
+                         pip_pip.render_authorship_badge(self.solo_review))
+
+    def test_endpoint_json_shape_and_names(self):
+        ep = pip_pip.authorship_badge_endpoint(self.solo_review)
+        self.assertEqual(ep, {"schemaVersion": 1, "label": "authorship",
+                              "message": "100% self-authored",
+                              "color": "brightgreen"})
+        self.assertEqual(pip_pip.authorship_badge_endpoint(
+            self.inherited_review)["color"], "red")
+        self.assertEqual(pip_pip.authorship_badge_endpoint(
+            self._review_with(50, 100))["color"], "yellow")
+        self.assertEqual(pip_pip.authorship_badge_endpoint(
+            self._review_with(20, 100))["color"], "orange")
+        review = review_of(self.solo_repo)
+        review.authorship = None
+        self.assertEqual(pip_pip.authorship_badge_endpoint(review),
+                         {"schemaVersion": 1, "label": "authorship",
+                          "message": "no data", "color": "lightgrey"})
+
+    def test_json_output_gains_badge_key(self):
+        data = pip_pip.review_to_json(self.inherited_review)
+        self.assertEqual(data["authorship_badge"],
+                         {"message": "mostly inherited", "color": "#e05d44",
+                          "color_name": "red", "mostly_inherited": True})
+        data = pip_pip.review_to_json(self.solo_review)
+        self.assertEqual(data["authorship_badge"]["message"], "100% self-authored")
+        self.assertEqual(data["authorship_badge"]["color"], "#4c1")
+        self.assertEqual(data["authorship_badge"]["color_name"], "brightgreen")
+        self.assertFalse(data["authorship_badge"]["mostly_inherited"])
+        review = review_of(self.solo_repo)
+        review.authorship = None
+        self.assertIsNone(pip_pip.review_to_json(review)["authorship_badge"])
+
+    def test_cli_authorship_badge_files(self):
+        out = os.path.join(self.tmp, "cli-authorship.svg")
+        out_json = os.path.join(self.tmp, "cli-authorship.json")
+        stdout = io.StringIO()
+        old = sys.stdout
+        sys.stdout = stdout
+        try:
+            rc = pip_pip.main([self.solo_repo, "--authorship-badge", out,
+                               "--authorship-badge-json", out_json])
+        finally:
+            sys.stdout = old
+        self.assertEqual(rc, 0)
+        with open(out, encoding="utf-8") as f:
+            self.assertEqual(f.read(),
+                             pip_pip.render_authorship_badge(self.solo_review))
+        with open(out_json, encoding="utf-8") as f:
+            self.assertEqual(json.load(f),
+                             pip_pip.authorship_badge_endpoint(self.solo_review))
+
+    def test_readme_flow_writes_authorship_badge(self):
+        repo = os.path.join(self.tmp, "readmeflow")
+        shutil.copytree(self.solo_repo, repo)
+        with open(os.path.join(repo, "README.md"), "w") as f:
+            f.write("# Solo\n\nA fine project.\n")
+        review = review_of(repo)
+        pip_pip.update_readme(repo, review)
+        auth_file = os.path.join(repo, "pip-authorship-badge.svg")
+        self.assertTrue(os.path.isfile(auth_file))
+        with open(auth_file, encoding="utf-8") as f:
+            self.assertEqual(f.read(), pip_pip.render_authorship_badge(review))
+        with open(os.path.join(repo, "README.md")) as f:
+            text = f.read()
+        grade_line = "![My PIP grade](pip-badge.svg)"
+        auth_line = "![Authorship](pip-authorship-badge.svg)"
+        self.assertIn(grade_line, text)
+        self.assertIn(auth_line, text)
+        self.assertLess(text.index(grade_line), text.index(auth_line))
+        self.assertLess(text.index(auth_line),
+                        text.index("![PIP report card](pip-card.svg)"))
+
+    def test_readme_section_default_is_unchanged_shape(self):
+        # The section still opens with the grade badge and closes with
+        # the same footer; the authorship line is the only addition.
+        section = pip_pip.render_readme_section(self.solo_review)
+        self.assertTrue(section.startswith(pip_pip.README_START))
+        self.assertTrue(section.endswith(pip_pip.README_END))
+        self.assertIn("The record speaks for itself.", section)
