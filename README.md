@@ -199,7 +199,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: littlestjames82-sys/pip-pip@main
+      - uses: littlestjames82-sys/pip-pip@v1
         with:
           persona: corporate
           # author: "your name"   # omit to review the most prolific author

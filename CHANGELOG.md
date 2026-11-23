@@ -3,6 +3,24 @@
 All notable changes to PIP (PyPI: `on-a-pip`) are recorded here. Versions are
 the tool's own; the record is the record.
 
+## 1.4.1 (Nov 24, 2026)
+
+- **GitHub Marketplace release.** The PIP Review Action is published to
+  GitHub Marketplace, pinned the normal way as
+  `littlestjames82-sys/pip-pip@v1` instead of `@main`. `action.yml` gains
+  Marketplace branding (award icon, purple). The README Action docs are
+  rewritten: an inputs table for `author` and `persona`, the
+  commit-and-push contract (why a workflow needs `contents: write` and
+  `fetch-depth: 0`), and a report-only pull request example that posts
+  the review to the run summary instead of committing anything.
+  `examples/monthly-profile-review.yml` is fixed: it passed an input the
+  Action does not define, and re-committed files the Action already
+  commits itself. A `.pre-commit-hooks.yaml` is included, for running PIP
+  as a pre-commit hook. The README also gains a PyPI downloads badge and
+  an Also from Ghost Developer Studio section. The review engine is
+  unchanged from 1.4.0: same grades, same flags, and reviews of record
+  reproduce exactly as before.
+
 ## 1.4.0 (Nov 20, 2026)
 
 - **Authorship badge.** The 1.3.0 authorship check becomes a badge a
