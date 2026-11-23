@@ -4,8 +4,9 @@
 # Setup: create a profile repository (a repo named exactly like your
 # username, with a README.md), copy this file to
 # .github/workflows/monthly-pip-review.yml in it, and commit. The Action
-# reviews the profile repo itself; point the `repo` input at any repo you
-# want reviewed instead.
+# reviews the repository it runs in (it has no `repo` input), and it
+# commits and pushes the refreshed card itself, so this workflow needs
+# no commit step of its own.
 name: Monthly PIP review
 
 on:
@@ -25,13 +26,5 @@ jobs:
           fetch-depth: 0   # PIP reads history; a shallow clone reviews a rumor
       - uses: littlestjames82-sys/pip-pip@main
         with:
-          repo: .
-      - name: Commit the refreshed review
-        run: |
-          if ! git diff --quiet README.md pip-card.svg pip-badge.svg; then
-            git config user.name "pip-bot"
-            git config user.email "pip-bot@example.invalid"
-            git add README.md pip-card.svg pip-badge.svg
-            git commit -m "Monthly PIP review refresh"
-            git push
-          fi
+          persona: corporate
+          # author: "your name"   # omit to review the most prolific author

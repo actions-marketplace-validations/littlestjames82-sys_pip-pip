@@ -4,6 +4,7 @@
 [![Tests](https://github.com/littlestjames82-sys/pip-pip/actions/workflows/tests.yml/badge.svg)](https://github.com/littlestjames82-sys/pip-pip/actions/workflows/tests.yml)
 [![Python](https://img.shields.io/pypi/pyversions/on-a-pip)](https://pypi.org/project/on-a-pip/)
 [![License: MIT](https://img.shields.io/github/license/littlestjames82-sys/pip-pip)](LICENSE)
+[![Downloads](https://static.pepy.tech/badge/on-a-pip)](https://pepy.tech/project/on-a-pip)
 
 Every tool reviews your code. **PIP reviews the programmer.**
 
@@ -175,7 +176,14 @@ on-a-pip --readme
 
 Run inside your repo, this writes `pip-card.svg` and `pip-badge.svg` and adds a marked **My PIP review** section to your README (the one at the bottom of this README is PIP reviewing this repo). Re-run it any time to refresh the grade.
 
-To keep it current automatically, use the GitHub Action in your workflow:
+To keep it current automatically, use the GitHub Action in your workflow. The Action has two inputs and no outputs; its whole job is to edit and commit files:
+
+| Input | Required | Default | What it does |
+| --- | --- | --- | --- |
+| `author` | no | *(most prolific author)* | Git author to review, matched against the names in your history. |
+| `persona` | no | `corporate` | The reviewing manager's style, as described in `action.yml`: `corporate`, `brutal`, `supportive`, or `passive`. |
+
+It installs `on-a-pip` from PyPI, runs `on-a-pip . --readme` in the checked-out repo, and commits any changes to `README.md`, `pip-card.svg`, and `pip-badge.svg` straight back to the branch it ran on. That commit-and-push design is why the workflow needs `contents: write` and a full clone:
 
 ```yaml
 name: pip-review
@@ -192,9 +200,55 @@ jobs:
         with:
           fetch-depth: 0
       - uses: littlestjames82-sys/pip-pip@main
+        with:
+          persona: corporate
+          # author: "your name"   # omit to review the most prolific author
 ```
 
-Every push gets a fresh review, committed by the bot. Your README becomes a living performance record, which is either motivating or a threat, depending on your habits.
+Every push gets a fresh review, committed by the bot. Your README becomes a living performance record, which is either motivating or a threat, depending on your habits. A ready-made monthly variant for a GitHub profile README lives in [`examples/monthly-profile-review.yml`](examples/monthly-profile-review.yml).
+
+### Grade a contributor on a pull request
+
+Do not point the Action above at a pull request: it commits and pushes, and pull-request tokens (especially from forks) are read-only. For a PR, run the same engine in report-only mode instead. This workflow grades the PR's most recent commit author, posts the full review to the run summary (visible from the PR's Checks tab), and uploads the report card as an artifact:
+
+```yaml
+name: pip-review-pr
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PIP
+        run: pip install on-a-pip
+      - name: Review the PR author
+        run: |
+          AUTHOR="$(git log -1 --format=%an)"
+          echo "Reviewing git author: $AUTHOR"
+          on-a-pip . --author "$AUTHOR" --md pip-review.md --svg pip-card.svg
+          cat pip-review.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the report card
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-report-card
+          path: |
+            pip-review.md
+            pip-card.svg
+```
+
+Notes on the PR version:
+
+- `git log -1 --format=%an` takes the author name from the PR's latest commit, which is exactly the name PIP matches on. For a PR with several authors, drop the `--author` flag and PIP reviews the most prolific author in the history it can see.
+- Nothing is committed and nothing is pushed, so it works on fork PRs with the default read-only token.
+- If you do want the card committed onto a same-repo PR branch instead, check out the PR's head branch (`ref: ${{ github.head_ref }}`), give the job `contents: write`, and use the Action from the first example. That does not work for forks.
 
 ## Performance
 
@@ -219,6 +273,13 @@ PIP runs `git log`, `git grep` and `git blame` on your machine and nothing else.
 - The package is called `on-a-pip` because PyPI rejected `pip-pip` as too similar to `pip` itself, which is fair: you do not get to out-pip pip. The tool was going to be `pip install pip-pip`. Now you install the news that you are on one.
 - Grades are deterministic: same history, same review. The formulas are plain arithmetic in one file, `pip_pip.py`, if you want to argue with them.
 - PIP reviews the most prolific author in the repo by default. Use `--author` in shared repos.
+
+## Also from Ghost Developer Studio
+
+- **Snap Judgment**: judges your screenshots folder from file metadata only, with a courtroom verdict. `pip install snap-judgment`
+- **Dead Projects Society**: builds a graveyard for your abandoned git projects, tombstones and all. `pip install dead-projects-society`
+- **Ghost Hands**: governed browser automation for AI agents, with every action classified, policy checked, and trailed. `pip install ghost-hands`
+- **Agent Seatbelt**: guardrails for AI coding agents, gating tool calls before they run. `pip install ghost-seatbelt`
 
 ## License
 

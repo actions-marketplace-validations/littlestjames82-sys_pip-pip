@@ -1,0 +1,8 @@
+- id: pip-review
+  name: PIP review card
+  description: Refresh the PIP report card section in the README from the repo's git history.
+  entry: on-a-pip . --readme
+  language: python
+  pass_filenames: false
+  always_run: true
+  require_serial: true

@@ -1,6 +1,9 @@
 name: "PIP Review"
 description: "Run PIP on a repository and commit an updated report card section to its README."
 author: "Ghost Developer Studio"
+branding:
+  icon: "award"
+  color: "purple"
 inputs:
   author:
     description: "Author to review (default: the most prolific author in the repo)"
