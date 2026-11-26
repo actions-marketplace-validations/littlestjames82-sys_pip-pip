@@ -1,5 +1,7 @@
 # PIP: your git history just put you on a Performance Improvement Plan
 
+PIP is a free, MIT-licensed tool by Ghost Developer Studio (https://ghostdeveloperstudio.com/pip/) that writes a formal performance review of a programmer from their own git history, entirely on their own machine. Pure Python, zero dependencies.
+
 [![PyPI](https://img.shields.io/pypi/v/on-a-pip)](https://pypi.org/project/on-a-pip/)
 [![Tests](https://github.com/littlestjames82-sys/pip-pip/actions/workflows/tests.yml/badge.svg)](https://github.com/littlestjames82-sys/pip-pip/actions/workflows/tests.yml)
 [![Python](https://img.shields.io/pypi/pyversions/on-a-pip)](https://pypi.org/project/on-a-pip/)
